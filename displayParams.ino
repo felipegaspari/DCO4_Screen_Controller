@@ -1,117 +1,165 @@
 void draw_param_1() {
-  //spr0_baseline();
-  paramChangeLastMillis = millis();
-  // spr[0].setTextColor(TFT_RED, TFT_BLACK);
-  // //spr[0].loadFont(AA_FONT_LARGE);
-  // spr[0].unloadFont();
-  // spr[0].setFreeFont(ORBITRON32);
-  // spr[0].setTextDatum(TR_DATUM);
-  // spr[0].drawNumber(paramValue, IWIDTH - 5, 0);
-  // //spr[0].loadFont(AA_FONT_LARGE);
-  // spr[0].setFreeFont(ORBITRON24);
-  // spr[0].setTextDatum(TL_DATUM);
-  // spr[0].drawString(paramName, 2, 2);
 
-  //spr2.fillSprite(TFT_BLACK);
-  spr2.setTextColor(TFT_BLACK);
-  spr2.fillRect(0, 0, 320, 30, TFT_RED);
-  //spr2.loadFont(AA_FONT_LARGE);
-  spr2.unloadFont();
-  spr2.setFreeFont(ORBITRON24);
-  spr2.setTextDatum(TR_DATUM);
-  spr2.drawNumber(paramValue, IWIDTH - 10, 0);
-  //spr2.loadFont(AA_FONT_LARGE);
-  spr2.setFreeFont(ORBITRON24);
-  spr2.setTextDatum(TL_DATUM);
-  spr2.drawString(paramName, 8, 0);
+  paramChangeLastMillis = millis();
+  paramChangeTimerFlag = true;
+
+  char str[3];
+  itoa(paramValue, str, 10);
+  lv_label_set_text(ui_CommandMessage, paramName.c_str());
+  lv_label_set_text(ui_CommandMessageShadow, paramName.c_str());
+  lv_label_set_text(ui_CommandValueShadow, str);
+  lv_label_set_text(ui_CommandValue, str);
+
+  lv_obj_remove_flag(ui_BottomMessagePanel, LV_OBJ_FLAG_HIDDEN);
 }
 
-// void display_preset_1() {
-//   spr[0].setFreeFont(ORBITRON32);
-//   spr[0].setTextDatum(MC_DATUM);
-//   spr[0].drawNumber(presetNumber, IWIDTH / 2, IHEIGHT / 2);
-//   //spr[0].loadFont(AA_FONT_LARGE);
-//   spr[0].setFreeFont(ORBITRON24);
-//   spr[0].setTextDatum(TL_DATUM);
-//   // if (serialSignal == 4) {
-//   //   spr[0].drawString("_", 6 + (presetChar * 4), 48);
-//   // }
-//   spr[0].drawString(presetNameString, 6, 40);
-// }
-
 void draw_preset_scroll_1() {
-  spr[0].fillSprite(TFT_BLACK);
+
+  char str[3];
+  itoa(presetNumber, str, 10);
   switch (serialSignal) {
     case 1:
-      // display_preset_1();
+      lv_label_set_text(ui_PresetN, str);
+      lv_label_set_text(ui_PresetNShadow, str);
+      lv_label_set_text(ui_PresetName, (const char *)presetNameBytes);
+      lv_label_set_text(ui_PresetNameShadow, (const char *)presetNameBytes);
       break;
     case 2:
-      draw_title("", TFT_BLACK, 0xf9e2, 0);
-      //display_preset_1();
+      lv_label_set_text(ui_PresetN, str);
+      lv_label_set_text(ui_PresetNShadow, str);
+      lv_label_set_text(ui_PresetName, (const char *)presetNameBytes);
+      lv_label_set_text(ui_PresetNameShadow, (const char *)presetNameBytes);
+      break;
+    case 3:
+      lv_label_set_text(ui_PresetNNew, str);
+      lv_label_set_text(ui_PresetNNewShadow, str);
+      lv_label_set_text(ui_PresetNameNew, (const char *)presetNameBytes);
+      lv_label_set_text(ui_PresetNameNewShadow, (const char *)presetNameBytes);
       break;
     case 4:
-      draw_title(" PRESET NAME", TFT_BLACK, 0xf9e2, 0);
-      //display_preset_1();
+
+      //lv_obj_add_state(ui_PresetNewName, LV_STATE_FOCUSED);
+      //lv_textarea_set_text(ui_PresetNewName, (const char *)presetNameBytes);
+      lv_textarea_delete_char_forward(ui_PresetNewName);
+      lv_textarea_add_char(ui_PresetNewName, (char)presetNameBytes[presetChar]);
+      lv_textarea_set_cursor_pos(ui_PresetNewName, presetChar);
+      break;
+    case 5:
       break;
     case 6:
       break;
   }
-  //draw_title("LOAD  PRESET  ", TFT_BLACK, 0xf9e2, 1);
-  spr0_baseline();
-  spr[0].setTextColor(TFT_RED, TFT_BLACK);
-  //spr[0].loadFont(AA_FONT_LARGE);
-  spr[0].setFreeFont(ORBITRON48);
-  //spr[0].setFreeFont(TESTER24);
-  spr[0].setTextDatum(MC_DATUM);
-  spr[0].drawNumber(presetNumber, IWIDTH / 2, (IHEIGHT / 2) + 26);
-  //spr[0].loadFont(AA_FONT_LARGE);
-  //spr[0].setFreeFont(ORBITRON24);
-  spr[0].setFreeFont(TESTER24);
-  spr[0].setTextDatum(TL_DATUM);
+}
 
-  if (serialSignal == 4) {
-    if (timer100msFlag == true) {
-      if (timer100msBlink) {
-        presetNameString = String((char*)presetNameBytes);
-        spr[0].drawString(presetNameString, 12, 38);
-      } else {
+void drawManualCalibration() {
+  char str[3];
+  char strLong[8];
 
-        byte presetNameBytesblink[12];
-        for (int i = 0; i < 11; i++) {
-          presetNameBytesblink[i] = presetNameBytes[i];
-        }
-        presetNameBytesblink[presetChar] = 32;
-        presetNameString = String((char*)presetNameBytesblink);
-        spr[0].drawString(presetNameString, 12, 38);
-      }
-    }
+  itoa(offset, str, 10);
+  lv_label_set_text(ui_calibrationOffset, str);
+  lv_label_set_text(ui_calibrationOffsetShadow, str);
+
+  itoa(manualCalibrationOSCN, str, 10);
+  lv_label_set_text(ui_oscillatorN, str);
+  lv_label_set_text(ui_oscillatorNShadow, str);
+
+
+  ltoa(calibrationGap, strLong, 10);
+  lv_label_set_text(ui_calibrationGap, strLong);
+  lv_label_set_text(ui_calibrationGapShadow, strLong);
+
+  if ((manualCalibrationStage % 2) == 0) {
+    lv_label_set_text(ui_waveform, "SAW");
+    lv_label_set_text(ui_waveformShadow, "SAW");
+  } else if (manualCalibrationStage == 1 || manualCalibrationStage == 5 || manualCalibrationStage == 9 || manualCalibrationStage == 14) {
+    lv_label_set_text(ui_waveform, "TRI");
+    lv_label_set_text(ui_waveformShadow, "TRI");
   } else {
-    spr[0].drawString(presetNameString, 12, 8);
+    lv_label_set_text(ui_waveform, "SQR");
+    lv_label_set_text(ui_waveformShadow, "SQR");
   }
-  presetScrollFlag = false;
-
-  presetNameString = String((char*)presetNameBytes);
 }
 
 void setDisplayParam() {
   switch (paramNumber) {
     case 1:
       paramName = " OSC1 SAW";
+      switch (paramValue) {
+        case 0:
+          paramName = paramName + " OFF";
+          break;
+        case 1:
+          paramName = paramName + " ON";
+          break;
+        default:
+          break;
+      }
+
       break;
     case 2:
       paramName = " OSC2 SAW";
+      switch (paramValue) {
+        case 0:
+          paramName = paramName + " OFF";
+          break;
+        case 1:
+          paramName = paramName + " ON";
+          break;
+        default:
+          break;
+      }
       break;
     case 3:
       paramName = " OSC1 TRI";
+      switch (paramValue) {
+        case 0:
+          paramName = paramName + " OFF";
+          break;
+        case 1:
+          paramName = paramName + " ON";
+          break;
+        default:
+          break;
+      }
       break;
     case 4:
       paramName = " OSC1 SIN";
+      switch (paramValue) {
+        case 0:
+          paramName = paramName + " OFF";
+          break;
+        case 1:
+          paramName = paramName + " ON";
+          break;
+        default:
+          break;
+      }
       break;
     case 5:
       paramName = " OSC1 SQR";
+      switch (paramValue) {
+        case 0:
+          paramName = paramName + " OFF";
+          break;
+        case 1:
+          paramName = paramName + " ON";
+          break;
+        default:
+          break;
+      }
       break;
     case 6:
       paramName = " OSC2 SQR";
+      switch (paramValue) {
+        case 0:
+          paramName = paramName + " OFF";
+          break;
+        case 1:
+          paramName = paramName + " ON";
+          break;
+        default:
+          break;
+      }
       break;
     case 7:
       paramName = " ResoAmpComp";
@@ -132,6 +180,7 @@ void setDisplayParam() {
           break;
         case 2:
           paramName = " ADSR3 TO BOTH";
+          break;
       }
       break;
     case 11:
@@ -150,7 +199,7 @@ void setDisplayParam() {
       break;
     case 15:
       paramName = " OSC2 Detune";
-      paramValue -= 127;
+      paramValue -= 256;
       break;
     case 16:
       paramName = " LFO2->OSC2 Pitch";
@@ -172,17 +221,49 @@ void setDisplayParam() {
       break;
     case 22:
       paramName = " SQR1 Level";
+      levelBarFlag = 1;
       break;
     case 23:
       paramName = " SQR2 Level";
+      levelBarFlag = 2;
       break;
     case 24:
       paramName = " SUB Level";
+      levelBarFlag = 3;
       break;
     case 25:
       paramName = " CALIBRATION VAL";
       break;
-
+    case 26:
+      switch (paramValue) {
+        case 0:
+          paramName = " MONO";
+          break;
+        case 1:
+          paramName = " POLY";
+          break;
+        case 2:
+          paramName = " UNISON";
+          break;
+        default:
+          break;
+      }
+      break;
+    case 27:
+      paramName = " Analog Detune";
+      break;
+    case 28:
+      paramName = " Analog Drift";
+      break;
+    case 29:
+      paramName = " Analog Drift Speed";
+      break;
+    case 30:
+      paramName = " Analog Drift Spread";
+      break;
+    case 31:
+      paramName = " Sync Mode";
+      break;
 
     case 40:
       paramName = " LFO1 -> Pitch";
@@ -202,9 +283,6 @@ void setDisplayParam() {
     case 45:
       paramName = " LFO2 -> PWM";
       break;
-    case 45:
-      paramName = " LFO2 -> PWM";
-      break;
     case 46:
       paramName = " ADSR3 -> PWM";
       paramValue -= 512;
@@ -213,44 +291,246 @@ void setDisplayParam() {
       paramName = " ADSR3 -> Pitch";
       break;
     case 48:
-      paramName = " ADSR1 Curve";
+      switch (paramValue) {
+        case 0:
+          paramName = " EXP";
+          break;
+        case 1:
+          paramName = " SOFT";
+          break;
+        case 2:
+          paramName = " STEEP";
+          break;
+        case 3:
+          paramName = " CONCAVE";
+          break;
+        case 4:
+          paramName = " FAST S";
+          break;
+        case 5:
+          paramName = " SLOW THEN LIN";
+          break;
+        case 6:
+          paramName = " ALMOST LIN";
+          break;
+        case 7:
+          paramName = " LINEAR";
+          break;
+        case 100:
+          paramName = " ADSR1 Curves";
+          break;
+        default:
+          break;
+      }
       break;
     case 49:
-      paramName = " ADSR2 Curve";
+      switch (paramValue) {
+        case 0:
+          paramName = " EXP";
+          break;
+        case 1:
+          paramName = " SOFT";
+          break;
+        case 2:
+          paramName = " STEEP";
+          break;
+        case 3:
+          paramName = " CONVEX";
+          break;
+        case 4:
+          paramName = " FAST START S";
+          break;
+        case 5:
+          paramName = " SLOW THEN LIN";
+          break;
+        case 6:
+          paramName = " FAST THEN LIN";
+          break;
+        case 7:
+          paramName = " ALMOST LIN";
+          break;
+        case 8:
+          paramName = " LINEAR";
+          break;
+        case 100:
+          paramName = " ADSR1 Decay";
+          break;
+        default:
+          break;
+      }
+      break;
+    case 50:
+      switch (paramValue) {
+        case 0:
+          paramName = " EXP";
+          break;
+        case 1:
+          paramName = " SOFT";
+          break;
+        case 2:
+          paramName = " STEEP";
+          break;
+        case 3:
+          paramName = " CONCAVE";
+          break;
+        case 4:
+          paramName = " FAST S";
+          break;
+        case 5:
+          paramName = " SLOW THEN LIN";
+          break;
+        case 6:
+          paramName = " ALMOST LIN";
+          break;
+        case 7:
+          paramName = " LINEAR";
+          break;
+        case 100:
+          paramName = " ADSR2 Curves";
+          break;
+        default:
+          break;
+      }
+      break;
+    case 51:
+      switch (paramValue) {
+        case 0:
+          paramName = " EXP";
+          break;
+        case 1:
+          paramName = " SOFT";
+          break;
+        case 2:
+          paramName = " STEEP";
+          break;
+        case 3:
+          paramName = " CONVEX";
+          break;
+        case 4:
+          paramName = " FAST START S";
+          break;
+        case 5:
+          paramName = " SLOW THEN LIN";
+          break;
+        case 6:
+          paramName = " FAST THEN LIN";
+          break;
+        case 7:
+          paramName = " ALMOST LIN";
+          break;
+        case 8:
+          paramName = " LINEAR";
+          break;
+        case 100:
+          paramName = " ADSR2 Decay";
+          break;
+        default:
+          break;
+      }
       break;
 
+    case 120:
+      paramName = " MAN FADERS";
+      break;
+    case 121:
+      paramName = " MAN FADERS 1";
+      break;
+    case 122:
+      paramName = " MAN FADERS 2";
+      break;
+    case 123:
+      paramName = " MANUAL VCF";
+      break;
+    case 124:
+      paramName = " MANUAL PWM";
+      break;
+    case 125:
+      paramName = " ALL CONTROLS MANUAL";
+      break;
     case 126:
       paramName = " ADSR3 ENABLED";
       break;
     case 127:
       paramName = " FUNCTION KEY";
       break;
-
-
-    case 101:
-      paramName = " CALIB MODE";
+    case 128:
+      paramName = " MANUAL VCA";
+      break;
+    case 129:
+      paramName = " MANUAL POTS";
       break;
 
-    case 885:
-      paramName = " VOICE MODE";
+
+
+    case 150:
+      paramName = " AUTO CALIBRATION";
+      switch (paramValue) {
+        case 0:
+          serialSignal = 2;
+          break;
+        case 1:
+          serialSignal = 7;
+          break;
+      }
+      signalFlag = true;
       break;
-    case 886:
-      paramName = " UNISON DETUNE";
+    case 151:
+      paramName = " MANUAL CALIBRATION";
+      switch (paramValue) {
+        case 1:
+          serialSignal = 8;
+          break;
+        case 0:
+          serialSignal = 7;
+          break;
+      }
+      signalFlag = true;
+      break;
+    case 152:  // manual calibration stage
+      paramName = "OSCILLATOR N";
+      manualCalibrationStage = paramValue;
+      manualCalibrationOSCN = manualCalibrationStage / 2;
+      break;
+    case 153:  // manual calibration offset
+      paramName = " OFFSET";
+      offset = (int8_t)paramValue;
+      break;
+    case 154:  // manual calibration GAP
+      paramName = " GAP";
+      calibrationGap = (int32_t)paramValue;
       break;
 
-    case 990:
+    case 190:  // MENU POSITION
+
+      break;
+
+    case 199:  // EXIT CURRENT MENU
+      switch (serialSignal) {
+        case 7:
+          serialSignal = 2;
+          signalFlag = true;
+          break;
+      }
+      break;
+
+    case 200:  // CALIBRATION MENU
+      serialSignal = 7;
+      signalFlag = true;
+      break;
+
+    case 210:
       paramName = " PW";
       break;
-    case 991:
+    case 211:
       paramName = " LFO3 Speed";
       break;
-    case 992:
+    case 212:
       paramName = " LFO3 Shape";
       break;
-    case 994:
+    case 214:
       paramName = " ADSR3 Restart";
       break;
-    case 995:
+    case 215:
       paramName = " VCA -> LEVEL";
       break;
 
@@ -258,6 +538,53 @@ void setDisplayParam() {
       break;
   }
 }
+//1 bool saw
+//2 bool tri
+//3 bool sin
+//4 bool sqr
+//5 bool saw2
+//6 bool sqr2
+//7 sqrLevel
+//8 sqr2Level
+//9 SUBLevel
+//10 Octave
+//11 OSC2Detune
+//12 OSC2Interval
+//13 OSC2LFO
+//14 LFO1ToPitch
+//15 ADSR3ToPitch
+//16 VelocityToVCF
+//17 VelocityToVCA
+//18 PW
+//19 LFOToPWM
+//20 ADSR3ToPWM
+//21 LFO1Speed
+//22 LFO1Shape --- howtodisplay?
+//23 LFO2Speed  ---
+//24 LFO2Shape ---
+//25 LFO3Speed
+//26 LFO3Shape
+//27 Keytracking ---
+//28 Portamento ---
+//29 OscPhaseSync ---  mostrar de alguna forma
+//30 ResonanceAmpCompensation --- bool
+//31 ADSR1Restart
+//32 ADSR2Restart --- bool
+//33 ADSR3Restart
+//34 ADSR1Curves  ----
+//35 ADSR2Curves ----
+//36
+//37 LFO2TOVCF  ---
+//38 LFO1TOPWM  ---
+//39 LFO1TOVCA ---
+//40 VCALEVEL ?
+//41 FUNCTION_KEY
+//42 ADSR3 ENABLED
+//43 ADSR3 TO OSC SELECT
+//44 VOICE MODE
+//45 UNISON DETUNE
+//46 CALIBRATION MODE
+//47 CALIBRATION VAL
 
 /*
 // bytes
@@ -287,6 +614,9 @@ void setDisplayParam() {
   ACTION_SQR2_level, 23
   ACTION_SUB_level, 24
   ACTION_calibration, 25
+
+  TG_VOICE_MODE, 26
+  ACTION_UNISON_DETUNE, 27
 
   //uint16_t
   ACTION_LFO1_to_DCO, 40

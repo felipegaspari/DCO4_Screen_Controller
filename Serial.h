@@ -1,30 +1,30 @@
 #ifndef __SERIAL_H__
 #define __SERIAL_H__
 
-//HardwareSerial Serial2(PA3, PA2);
-
 void serial_read_n();
 
 volatile byte presetNumber;
 //byte presetNameBytes[8];
 String presetNameString = "Vacio";
 
-bool presetScrollFlag = false;
+volatile bool presetScrollFlag = false;
 
-byte paramNumber;
-int paramValue;
+volatile byte paramNumber;
+volatile int32_t paramValue;
 String paramName;
 
-bool paramChangeFlag = false;
+volatile bool paramChangeFlag = false;
+ 
+volatile bool signalFlag;
+volatile byte serialSignal = 1;
 
-bool signalFlag;
-byte serialSignal;
+volatile bool presetCharFlag = false;
+volatile byte presetChar = 0;
 
-bool presetCharFlag = false;
-byte presetChar = 0;
+volatile byte levelBarFlag = true;
 
-uint8_t presetNameBytes[12];
-
+volatile char presetNameBytes[12];
+volatile char presetNameBytesOLD[12];
 #endif
 
 /*

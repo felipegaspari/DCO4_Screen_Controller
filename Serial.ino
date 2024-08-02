@@ -1,7 +1,6 @@
-void serial_read_n() {
+void serial_read_n2() {
   while (Serial2.available() > 0) {
     char commandCharacter = Serial2.read();  //we use characters (letters) for controlling the switch-case
-    //Serial.println(Serial2.read());
     switch (commandCharacter) {
       case 'p':
         {
@@ -9,7 +8,7 @@ void serial_read_n() {
           byte finishByte = 1;
           byte readByte = 0;
 
-          while (Serial2.available() < 1) {}
+          while (Serial2.available() < 3) {}
 
           Serial2.readBytes(paramBytes, 3);
 
@@ -32,7 +31,7 @@ void serial_read_n() {
           byte finishByte = 1;
           byte readByte = 0;
 
-          while (Serial2.available() < 1) {}
+          while (Serial2.available() < 2) {}
 
           Serial2.readBytes(paramBytes, 2);
 
@@ -41,7 +40,7 @@ void serial_read_n() {
           }
 
           paramNumber = paramBytes[0];
-          paramValue = paramBytes[1];
+          paramValue = (int16_t)paramBytes[1];
 
           setDisplayParam();
 
@@ -53,41 +52,31 @@ void serial_read_n() {
         {
           byte finishByte = 1;
           byte readByte = 0;
-          byte presetMessage[9];
+          byte presetMessage[13];
           // byte presetNameBytes[8];  // = { 32, 32, 32, 32, 32, 32, 32, 32 };
           //while (Serial2.available() < 1) {}
 
-          while (Serial2.available() < 9) {}
+          while (Serial2.available() < 13) {}
 
-          Serial2.readBytes(presetMessage, 9);
+          Serial2.readBytes(presetMessage, 13);
 
           while (readByte != finishByte) {
             readByte = Serial2.read();
           }
 
           presetNumber = presetMessage[0];
-          for (int i = 0; i < 8; i++) {
+          for (int i = 0; i < 12; i++) {
+            if (presetMessage[i + 1] < 32) {
+              presetMessage[i + 1] = 32;
+            }
             presetNameBytes[i] = presetMessage[i + 1];
           }
 
-          Serial2.flush();
+          //Serial2.flush();
 
           presetNameString = String((char*)presetNameBytes);
           presetScrollFlag = true;
 
-          break;
-        }
-      case 'r':
-        {
-          byte presetNameBytes[8] = { 32, 32, 32, 32, 32, 32, 32, 32 };
-          while (Serial2.available() < 1) {}
-          presetNumber = Serial2.read();
-          while (Serial2.available() < 1) {}
-
-          Serial2.readBytes(presetNameBytes, 8);
-
-          presetNameString = String((char*)presetNameBytes);
-          presetScrollFlag = true;
           break;
         }
       case 's':
@@ -101,6 +90,192 @@ void serial_read_n() {
         {
           while (Serial2.available() < 1) {}
           presetChar = Serial2.read();
+          presetCharFlag = true;
+          break;
+        }
+            case 'x':
+        {
+
+          byte paramBytes[5];
+          byte paramValueArray[4];
+          byte finishByte = 1;
+          byte readByte = 0;
+          uint32_t paramValue32;
+
+          while (Serial2.available() < 1) {}
+
+          Serial2.readBytes(paramBytes, 5);
+
+          while (readByte != finishByte) {
+            readByte = Serial2.read();
+          }
+
+          paramNumber = paramBytes[0];
+          paramValueArray[0] = paramBytes[1];
+          paramValueArray[1] = paramBytes[2];
+          paramValueArray[2] = paramBytes[3];
+          paramValueArray[3] = paramBytes[4];
+
+          memcpy(&paramValue32, paramValueArray, 4);
+          paramValue = (int32_t)paramValue32;
+
+          setDisplayParam();
+
+          paramChangeFlag = true;
+          break;
+        }
+    }
+  }
+}
+
+void serial_read_n() {
+  while (Serial1.available() > 0) {
+    char commandCharacter = Serial1.read();  //we use characters (letters) for controlling the switch-case
+    switch (commandCharacter) {
+      case 'p':
+        {
+          byte paramBytes[3];
+          byte finishByte = 1;
+          byte readByte = 0;
+
+          while (Serial1.available() < 1) {}
+
+          Serial1.readBytes(paramBytes, 3);
+
+          while (readByte != finishByte) {
+            readByte = Serial1.read();
+          }
+
+          paramNumber = paramBytes[0];
+          paramValue = (int16_t)word(paramBytes[1], paramBytes[2]);
+
+          setDisplayParam();
+
+          if (serialSignal != 6) {
+            paramChangeFlag = true;
+          }
+          //Serial1.flush();
+          break;
+        }
+      case 'w':
+        {
+          byte paramBytes[2];
+          byte finishByte = 1;
+          byte readByte = 0;
+
+          while (Serial1.available() < 1) {}
+
+          Serial1.readBytes(paramBytes, 2);
+
+          while (readByte != finishByte) {
+            readByte = Serial1.read();
+          }
+
+          paramNumber = paramBytes[0];
+          paramValue = (int16_t)paramBytes[1];
+
+          setDisplayParam();
+          if (serialSignal != 6) {
+            paramChangeFlag = true;
+          }
+          //Serial1.flush();
+          break;
+        }
+      case 'x':
+        {
+          byte paramBytes[5];
+          byte paramValueArray[4];
+          byte finishByte = 1;
+          byte readByte = 0;
+          uint32_t paramValue32;
+
+          while (Serial1.available() < 1) {}
+
+          Serial1.readBytes(paramBytes, 5);
+
+          while (readByte != finishByte) {
+            readByte = Serial1.read();
+          }
+
+          uint8_t paramNumber = paramBytes[0];
+          paramValueArray[0] = paramBytes[1];
+          paramValueArray[1] = paramBytes[2];
+          paramValueArray[2] = paramBytes[3];
+          paramValueArray[3] = paramBytes[4];
+
+          memcpy(&paramValue32, paramValueArray, 4);
+          paramValue = (int32_t)paramValue32;
+
+          setDisplayParam();
+
+          if (serialSignal != 6) {
+            paramChangeFlag = true;
+          }
+
+          paramChangeFlag = true;
+          break;
+        }
+            case 'y':
+        {
+          byte paramBytes[2];
+          byte finishByte = 1;
+          byte readByte = 0;
+
+          while (Serial1.available() < 1) {}
+
+          Serial1.readBytes(paramBytes, 2);
+
+          while (readByte != finishByte) {
+            readByte = Serial1.read();
+          }
+
+          paramNumber = paramBytes[0];
+          paramValue = (int16_t)paramBytes[1];
+
+          updateParameters(paramNumber, (uint16_t)paramValue);
+
+          break;
+        }
+      case 'q':
+        {
+          byte finishByte = 1;
+          byte readByte = 0;
+          byte presetMessage[13];
+          // byte presetNameBytes[8];  // = { 32, 32, 32, 32, 32, 32, 32, 32 };
+          //while (Serial1.available() < 1) {}
+
+          while (Serial1.available() < 1) {}
+
+          Serial1.readBytes(presetMessage, 13);
+
+          while (readByte != finishByte) {
+            readByte = Serial1.read();
+          }
+
+          presetNumber = presetMessage[0];
+          for (int i = 0; i < 12; i++) {
+            if (presetMessage[i + 1] < 32) {
+              presetMessage[i + 1] = 32;
+            }
+            presetNameBytes[i] = presetMessage[i + 1];
+          }
+
+          presetNameString = String((char*)presetNameBytes);
+          presetScrollFlag = true;
+
+          break;
+        }
+      case 's':
+        {
+          while (Serial1.available() < 1) {}
+          serialSignal = Serial1.read();
+          signalFlag = true;
+          break;
+        }
+      case 'c':
+        {
+          while (Serial1.available() < 1) {}
+          presetChar = Serial1.read();
           presetCharFlag = true;
           break;
         }
