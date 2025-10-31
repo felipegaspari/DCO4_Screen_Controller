@@ -1,4 +1,5 @@
 SET(SOURCES ui_comp_bar2.c
+    ui_comp_baradsr.c
     ui_comp_barcyberorange.c
     ui_comp.c
     ui_Main.c
@@ -14,11 +15,13 @@ SET(SOURCES ui_comp_bar2.c
     fonts/ui_font_Square140.c
     fonts/ui_font_Square22.c
     fonts/ui_font_radj148Semi.c
-    fonts/ui_font_radj22.c
     fonts/ui_font_radj22SEMI.c
-    fonts/ui_font_radj26.c
     fonts/ui_font_radj26Medium.c
     fonts/ui_font_radjLight140.c
-    fonts/ui_font_radjSemiBold140.c)
+    fonts/ui_font_radjMed32.c
+    fonts/ui_font_radjMed38.c
+    fonts/ui_font_radjSemi160.c
+    fonts/ui_font_radjSemi180.c
+    fonts/ui_font_square32.c)
 
 add_library(ui ${SOURCES})

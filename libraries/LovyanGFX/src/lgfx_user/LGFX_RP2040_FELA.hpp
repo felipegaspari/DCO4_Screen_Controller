@@ -9,7 +9,7 @@
 
 class LGFX : public lgfx::LGFX_Device
 {
-  lgfx::Panel_ILI9341     _panel_instance;
+  lgfx::Panel_ILI9488     _panel_instance;
   lgfx::Bus_SPI       _bus_instance;
 
   public:
@@ -32,8 +32,8 @@ class LGFX : public lgfx::LGFX_Device
       auto cfg = _panel_instance.config();
       cfg.pin_cs       = 22;
       cfg.pin_rst      = 19;
-      cfg.panel_width  = 240;
-      cfg.panel_height = 320;
+      cfg.panel_width  = 320;
+      cfg.panel_height = 480;
       cfg.offset_x     = 0;
       cfg.offset_y     = 0;
       cfg.invert       = false;
