@@ -149,13 +149,13 @@ bool lv_obj_is_layout_positioned(const lv_obj_t * obj);
 
 /**
  * Mark the object for layout update.
- * @param obj      pointer to an object whose children needs to be updated
+ * @param obj      pointer to an object whose children need to be updated
  */
 void lv_obj_mark_layout_as_dirty(lv_obj_t * obj);
 
 /**
  * Update the layout of an object.
- * @param obj      pointer to an object whose children needs to be updated
+ * @param obj      pointer to an object whose position and size needs to be updated
  */
 void lv_obj_update_layout(const lv_obj_t * obj);
 
@@ -179,9 +179,9 @@ void lv_obj_set_align(lv_obj_t * obj, lv_align_t align);
 void lv_obj_align(lv_obj_t * obj, lv_align_t align, int32_t x_ofs, int32_t y_ofs);
 
 /**
- * Align an object to an other object.
+ * Align an object to another object.
  * @param obj       pointer to an object to align
- * @param base      pointer to an other object (if NULL `obj`s parent is used). 'obj' will be aligned to it.
+ * @param base      pointer to another object (if NULL `obj`s parent is used). 'obj' will be aligned to it.
  * @param align     type of alignment (see 'lv_align_t' enum)
  * @param x_ofs     x coordinate offset after alignment
  * @param y_ofs     y coordinate offset after alignment
@@ -195,10 +195,22 @@ void lv_obj_align_to(lv_obj_t * obj, const lv_obj_t * base, lv_align_t align, in
  * @param obj       pointer to an object to align
  * @note            if the parent size changes `obj` needs to be aligned manually again
  */
-static inline void lv_obj_center(lv_obj_t * obj)
-{
-    lv_obj_align(obj, LV_ALIGN_CENTER, 0, 0);
-}
+void lv_obj_center(lv_obj_t * obj);
+
+/**
+ * Set the transform matrix of an object
+ * @param obj       pointer to an object
+ * @param matrix    pointer to a matrix to set
+ * @note `LV_DRAW_TRANSFORM_USE_MATRIX` needs to be enabled.
+ */
+void lv_obj_set_transform(lv_obj_t * obj, const lv_matrix_t * matrix);
+
+/**
+ * Reset the transform matrix of an object to identity matrix
+ * @param obj       pointer to an object
+ * @note `LV_DRAW_TRANSFORM_USE_MATRIX` needs to be enabled.
+ */
+void lv_obj_reset_transform(lv_obj_t * obj);
 
 /**
  * Copy the coordinates of an object to an area
@@ -256,14 +268,14 @@ int32_t lv_obj_get_y(const lv_obj_t * obj);
 int32_t lv_obj_get_y2(const lv_obj_t * obj);
 
 /**
- * Get the actually set x coordinate of object, i.e. the offset form the set alignment
+ * Get the actually set x coordinate of object, i.e. the offset from the set alignment
  * @param obj       pointer to an object
  * @return          the set x coordinate
  */
 int32_t lv_obj_get_x_aligned(const lv_obj_t * obj);
 
 /**
- * Get the actually set y coordinate of object, i.e. the offset form the set alignment
+ * Get the actually set y coordinate of object, i.e. the offset from the set alignment
  * @param obj       pointer to an object
  * @return          the set y coordinate
  */
@@ -344,6 +356,13 @@ void lv_obj_refr_pos(lv_obj_t * obj);
 void lv_obj_move_to(lv_obj_t * obj, int32_t x, int32_t y);
 
 void lv_obj_move_children_by(lv_obj_t * obj, int32_t x_diff, int32_t y_diff, bool ignore_floating);
+
+/**
+ * Get the transform matrix of an object
+ * @param obj       pointer to an object
+ * @return          pointer to the transform matrix or NULL if not set
+ */
+const lv_matrix_t * lv_obj_get_transform(const lv_obj_t * obj);
 
 /**
  * Transform a point using the angle and zoom style properties of an object

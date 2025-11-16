@@ -10,7 +10,7 @@
 
 TcUnicode provides Unicode character support to a wide range of display libraries (Adafruit_GFX, U8G2, TFT_eSPI, and also TcMenu). There is no need to use special versions of the libraries to use TcUnicode, and there is even a UI for creating the fonts. 
 
-Dave Cherry / TheCodersCorner.com made this framework available for you to use. It takes me significant effort to keep all my libraries current and working on a wide range of boards. Please consider making at least a one off donation via the sponsor button if you find it useful.
+TcMenu organisation made this framework available for you to use. It takes significant effort to keep all our libraries current and working on a wide range of boards. Please consider making at least a one off donation via the sponsor buttons if you find it useful.
 
 <a href="https://www.buymeacoffee.com/davetcc" target="_blank"><img src="https://cdn.buymeacoffee.com/buttons/v2/default-blue.png" alt="Buy Me A Coffee" style="height: 60px !important;width: 217px !important;" ></a>
 
@@ -33,7 +33,7 @@ This package includes a strict asynchronous UTF8 decoder that needs very little 
 
 ## Creating your own tcUnicode or Adafruit GFX fonts
 
-[TcMenu Designer can create tcUnicode and Adafruit fonts](https://www.thecoderscorner.com/products/arduino-libraries/tc-menu/using-custom-fonts-in-menu/#creating-a-unicode-or-adafruit-font-using-the-designer-ui) built into the [tcMenu Designer application](https://github.com/TcMenu/tcMenu/releases). As of Designer 4.3 the bitmap font generator has been substantially improved and produces very high quality font exports, even at very small sizes and includes a bitmap editor to touch up any erring pixels.
+[TcMenu Designer can create tcUnicode and Adafruit fonts](https://tcmenu.github.io/documentation/arduino-libraries/tc-menu/using-custom-fonts-in-menu/#creating-a-unicode-or-adafruit-font-using-the-designer-ui) built into the [tcMenu Designer application](https://github.com/TcMenu/tcMenu/releases). As of Designer 4.3 the bitmap font generator has been substantially improved and produces very high quality font exports, even at very small sizes and includes a bitmap editor to touch up any erring pixels.
 
 If someone from the U8G2 and TFT_eSPI teams help us, we'll make it possible to generate U8G2 and TFT_eSPI bitmap fonts from there too. 
 
@@ -58,11 +58,7 @@ The included fonts are separately licenced [Font licence page](src/Fonts/font-li
 
 ## Questions and documentation
 
-TheCodersCorner.com invest a lot of time and resources into making this open source product which is used by literally thousands of users. We offer both [commercial support](https://www.thecoderscorner.com/support-services/training-support/) and [C++/Java/Dart consultancy](https://www.thecoderscorner.com/support-services/consultancy/), or if you just want to say thanks, you can also make a donation via [GitHub](https://github.com/TcMenu/tcMenu) (this repository). 
-
-<a href="https://www.buymeacoffee.com/davetcc" target="_blank"><img src="https://cdn.buymeacoffee.com/buttons/v2/default-blue.png" alt="Buy Me A Coffee" style="height: 60px !important;width: 217px !important;" ></a>
-
-* [UTF-8 decoder and Unicode font documentation on TheCodersCorner.com](https://www.thecoderscorner.com/products/arduino-libraries/tc-unicode-helper/)
+* [UTF-8 decoder and Unicode font documentation on TheCodersCorner.com](https://tcmenu.github.io/documentation/arduino-libraries/tc-unicode-helper/)
 * [discussions section of the tcMenu repo](https://github.com/TcMenu/tcMenu/discussions) of tcmenu git repo
 * [Arduino discussion forum](https://forum.arduino.cc/) where questions can be asked, please tag me using `@davetcc`.
 * [Legacy discussion forum probably to be made read only soon](https://www.thecoderscorner.com/jforum/).

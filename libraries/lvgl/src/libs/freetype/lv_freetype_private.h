@@ -14,10 +14,13 @@ extern "C" {
  *      INCLUDES
  *********************/
 
-#include "../../../lvgl.h"
+#include "lv_freetype.h"
 
 #if LV_USE_FREETYPE
 
+#include "../../misc/cache/lv_cache.h"
+#include "../../misc/lv_ll.h"
+#include "../../font/lv_font.h"
 #include "ft2build.h"
 #include FT_FREETYPE_H
 #include FT_GLYPH_H
@@ -25,6 +28,7 @@ extern "C" {
 #include FT_SIZES_H
 #include FT_IMAGE_H
 #include FT_OUTLINE_H
+#include FT_STROKER_H
 
 /*********************
  *      DEFINES
@@ -43,7 +47,8 @@ extern "C" {
 #define LV_ASSERT_FREETYPE_FONT_DSC(dsc)                                                   \
     do {                                                                                   \
         LV_ASSERT_NULL(dsc);                                                               \
-        LV_ASSERT_MSG(LV_FREETYPE_FONT_DSC_HAS_MAGIC_NUM(dsc), "Invalid font descriptor"); \
+        LV_ASSERT_FORMAT_MSG(LV_FREETYPE_FONT_DSC_HAS_MAGIC_NUM(dsc),                      \
+                             "Invalid font descriptor: 0x%" LV_PRIx32, (dsc)->magic_num);  \
     } while (0)
 
 #define FT_INT_TO_F26DOT6(x) ((x) << 6)
@@ -56,6 +61,26 @@ extern "C" {
  *      TYPEDEFS
  **********************/
 
+struct _lv_freetype_outline_vector_t {
+    int32_t x;
+    int32_t y;
+};
+
+typedef struct {
+    int32_t segments_size;
+    int32_t data_size;
+} lv_freetype_outline_sizes_t;
+
+struct _lv_freetype_outline_event_param_t {
+    lv_freetype_outline_t outline;
+    lv_freetype_outline_type_t type;
+    lv_freetype_outline_vector_t to;
+    lv_freetype_outline_vector_t control1;
+    lv_freetype_outline_vector_t control2;
+    lv_freetype_outline_sizes_t sizes;
+};
+
+
 typedef struct _lv_freetype_cache_node_t lv_freetype_cache_node_t;
 
 struct _lv_freetype_cache_node_t {
@@ -66,6 +91,8 @@ struct _lv_freetype_cache_node_t {
     uint32_t ref_size;                  /**< Reference size for calculating outline glyph's real size.*/
 
     FT_Face face;
+    lv_mutex_t face_lock;
+    bool face_has_kerning;
 
     /*glyph cache*/
     lv_cache_t * glyph_cache;
@@ -94,6 +121,8 @@ typedef struct _lv_freetype_font_dsc_t {
     lv_freetype_cache_node_t * cache_node;
     lv_cache_entry_t * cache_node_entry;
     FTC_FaceID face_id;
+    uint32_t outline_stroke_width;
+    lv_font_kerning_t kerning;
 } lv_freetype_font_dsc_t;
 
 /**********************

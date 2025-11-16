@@ -14,8 +14,8 @@
 #ifndef _SWITCHINPUT_H
 #define _SWITCHINPUT_H
 
-#include <IoAbstraction.h>
-#include <TaskManager.h>
+#include "IoAbstraction.h"
+#include "TaskManager.h"
 #include <SimpleCollections.h>
 
 // START user adjustable section
@@ -61,7 +61,7 @@
  * quick to change direction in 1/10th of a second, but it is configurable in case.
  */
 #ifndef REJECT_DIRECTION_CHANGE_THRESHOLD
-#define REJECT_DIRECTION_CHANGE_THRESHOLD 100000
+#define REJECT_DIRECTION_CHANGE_THRESHOLD 10000
 #endif //REJECT_DIRECTION_CHANGE_THRESHOLD
 
 // END user adjustable section
@@ -163,6 +163,8 @@ public:
 
 	void changeOnPressed(KeyCallbackFn pFunction);
 	void changeListener(SwitchListener* listener);
+
+	void setRepeatInterval(uint8_t newInterval) { repeatInterval = newInterval;}
 };
 
 /**
@@ -356,8 +358,8 @@ protected:
  */  
 class HardwareRotaryEncoder : public AbstractHwRotaryEncoder {
 private:
-	uint8_t aLast;
-	uint8_t cleanFromB;
+    uint8_t state = 0;        // Current state of the encoder
+    uint8_t pulseCounter = 0; // Pulse counter for FULL_CYCLE and HALF_CYCLE modes
 public:
     /**
      * Create an instance of a hardware rotary encoder specifying the A and B pin, the acceleration parameters and encoder type.
@@ -739,6 +741,14 @@ public:
     bool removeSwitch(pinid_t pin) {
         return keys.removeByKey(pin);
     }
+
+	/**
+	 * Allows for reconfiguration of the repeat key at runtime,
+	 * it uses the same repeat interval as when adding a switch.
+	 * @param pin the pin to reconfigure
+	 * @param interval the new interval - see add switch
+	 */
+	void setRepeatInterval(pinid_t pin, uint8_t interval);
 
 private:
     bool internalAddSwitch(pinid_t pin, bool invertLogic);

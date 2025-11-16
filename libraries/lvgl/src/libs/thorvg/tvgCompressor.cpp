@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020 - 2023 the ThorVG project. All rights reserved.
+ * Copyright (c) 2020 - 2024 the ThorVG project. All rights reserved.
 
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -57,8 +57,7 @@
  * http://marknelson.us/1989/10/01/lzw-data-compression/
  */
 #include "config.h"
-
-
+#include "thorvg.h"
 
 #include <string>
 #include <memory.h>
@@ -112,7 +111,8 @@ struct BitStreamWriter
 
     uint8_t* allocBytes(const int bytesWanted, uint8_t * oldPtr, const int oldSize)
     {
-        auto newMemory = static_cast<uint8_t *>(malloc(bytesWanted));
+        auto newMemory = static_cast<uint8_t *>(lv_malloc(bytesWanted));
+        LV_ASSERT_MALLOC(newMemory);
         memset(newMemory, 0, bytesWanted);
 
         if (oldPtr) {
@@ -349,7 +349,8 @@ uint8_t* lzwDecode(const uint8_t* compressed, uint32_t compressedSizeBytes, uint
     int firstByte = 0;
     int bytesDecoded = 0;
     int codeBitsWidth = StartBits;
-    auto uncompressed = (uint8_t*) malloc(sizeof(uint8_t) * uncompressedSizeBytes);
+    auto uncompressed = (uint8_t*) lv_malloc(sizeof(uint8_t) * uncompressedSizeBytes);
+    LV_ASSERT_MALLOC(uncompressed);
     auto ptr = uncompressed;
 
     /* We'll reconstruct the dictionary based on the bit stream codes.
@@ -445,7 +446,8 @@ size_t b64Decode(const char* encoded, const size_t len, char** decoded)
     if (!decoded || !encoded || len == 0) return 0;
 
     auto reserved = 3 * (1 + (len >> 2)) + 1;
-    auto output = static_cast<char*>(malloc(reserved * sizeof(char)));
+    auto output = static_cast<char*>(lv_malloc(reserved * sizeof(char)));
+    LV_ASSERT_MALLOC(output);
     if (!output) return 0;
     output[reserved - 1] = '\0';
 
@@ -461,19 +463,36 @@ size_t b64Decode(const char* encoded, const size_t len, char** decoded)
         auto value2 = B64_INDEX[(size_t)encoded[1]];
         output[idx++] = (value1 << 2) + ((value2 & 0x30) >> 4);
 
-        if (!encoded[2] || encoded[2] == '=' || encoded[2] == '.') break;
+        if (!encoded[2] || encoded[3] < 0 || encoded[2] == '=' || encoded[2] == '.') break;
         auto value3 = B64_INDEX[(size_t)encoded[2]];
         output[idx++] = ((value2 & 0x0f) << 4) + ((value3 & 0x3c) >> 2);
 
-        if (!encoded[3] || encoded[3] == '=' || encoded[3] == '.') break;
+        if (!encoded[3] || encoded[3] < 0 || encoded[3] == '=' || encoded[3] == '.') break;
         auto value4 = B64_INDEX[(size_t)encoded[3]];
         output[idx++] = ((value3 & 0x03) << 6) + value4;
         encoded += 4;
     }
     *decoded = output;
-    return reserved;
+    return idx;
 }
 
+
+/************************************************************************/
+/* DJB2 Implementation                                                   */
+/************************************************************************/
+
+unsigned long djb2Encode(const char* str)
+{
+    if (!str) return 0;
+
+    unsigned long hash = 5381;
+    int c;
+
+    while ((c = *str++)) {
+        hash = ((hash << 5) + hash) + c; // hash * 33 + c
+    }
+    return hash;
+}
 
 }
 

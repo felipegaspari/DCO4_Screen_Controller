@@ -19,6 +19,27 @@
 #include "timers_millis.h"
 #include "displayParams.h"
 
+// High-level screen modes driven by serialSignal.
+// Keep the numeric values to preserve the existing protocol.
+enum class ScreenMode : uint8_t {
+  PresetScroll      = 1,  // LOAD (PRESET SCROLL)
+  LoadSaveExit      = 2,  // LOAD/SAVE EXIT
+  SaveSelectPreset  = 3,  // SAVE MODE - Select destination preset
+  SaveSetName       = 4,  // SAVE MODE - set preset name
+  SaveCompleted     = 5,  // PRESET SAVED
+  Silent            = 6,  // SCREEN SILENCE
+  CalibrationMenu   = 7,  // CALIBRATION MENU
+  ManualCalibration = 8   // MANUAL CALIBRATION
+};
+
+inline ScreenMode getScreenMode() {
+  return static_cast<ScreenMode>(serialSignal);
+}
+
+inline void setScreenMode(ScreenMode mode) {
+  serialSignal = static_cast<uint8_t>(mode);
+}
+
 static const uint16_t screenWidth = 480;
 static const uint16_t screenHeight = 320;
 
@@ -120,27 +141,28 @@ void loop(void) {
   // }
 }
 
+// --- Helpers for loop1() ---
 
-void loop1(void) {
+static void handleScreenModeChange(ScreenMode mode) {
+  if (!signalFlag) {
+    return;
+  }
 
-  millisTimer();
-
-
-  if (signalFlag) {
-    switch (serialSignal) {
-      case 1:
+  switch (mode) {
+    case ScreenMode::PresetScroll:
         draw_preset_scroll_1();
         break;
-      case 2:
+
+    case ScreenMode::LoadSaveExit:
         lv_scr_load(ui_Main);
         lv_obj_add_flag(ui_PresetSavePanel, LV_OBJ_FLAG_HIDDEN);
         lv_obj_add_flag(ui_PresetNewName, LV_OBJ_FLAG_HIDDEN);
         draw_preset_scroll_1();
-        serialSignal = 1;
+      setScreenMode(ScreenMode::PresetScroll);
         break;
-      case 3:  // SAVE MODE - Select destination preset
 
-        //strcpy(presetNameBytesOLD, presetNameBytes);  // caused freeze on pi pico. ust be done on other core
+    case ScreenMode::SaveSelectPreset: {
+      // SAVE MODE - Select destination preset
         char str[3];
         itoa(presetNumber, str, 10);
         lv_textarea_set_text(ui_PresetNewName, (const char *)presetNameBytes);
@@ -151,39 +173,52 @@ void loop1(void) {
         draw_preset_scroll_1();
         lv_obj_remove_flag(ui_PresetSavePanel, LV_OBJ_FLAG_HIDDEN);
         break;
-      case 4:  // SAVE MODE - set preset name
+    }
+
+    case ScreenMode::SaveSetName:
+      // SAVE MODE - set preset name
         presetChar = 0;
         lv_obj_remove_flag(ui_PresetNewName, LV_OBJ_FLAG_HIDDEN);
         lv_textarea_set_cursor_pos(ui_PresetNewName, presetChar);
         lv_textarea_set_cursor_pos(ui_PresetNewName, presetChar);
         break;
-      case 5:  // PRESET SAVED
+
+    case ScreenMode::SaveCompleted:
+      // PRESET SAVED
         lv_obj_add_flag(ui_PresetNewName, LV_OBJ_FLAG_HIDDEN);
         lv_obj_add_flag(ui_PresetSavePanel, LV_OBJ_FLAG_HIDDEN);
         lv_obj_remove_flag(ui_PresetSavedMesage, LV_OBJ_FLAG_HIDDEN);
         paramChangeTimerFlag = true;
         paramChangeLastMillis = millis();
-        serialSignal = 1;
+      setScreenMode(ScreenMode::PresetScroll);
         draw_preset_scroll_1();
         break;
-      case 6:  // SCREEN SILENCE
+
+    case ScreenMode::Silent:
+      // SCREEN SILENCE - no immediate action
         break;
-      case 7:  // CALIBRATION MENU
+
+    case ScreenMode::CalibrationMenu:
+      // CALIBRATION MENU
         lv_obj_add_flag(ui_manualCalibrationPanel, LV_OBJ_FLAG_HIDDEN);
         lv_scr_load(ui_MANUALCALIBRATION);
         lv_obj_add_flag(ui_manualCalibrationPanel, LV_OBJ_FLAG_HIDDEN);
         break;
-      case 8:  // MANUAL CALIBRATION
+
+    case ScreenMode::ManualCalibration:
+      // MANUAL CALIBRATION
         lv_obj_remove_flag(ui_manualCalibrationPanel, LV_OBJ_FLAG_HIDDEN);
         lv_scr_load(ui_MANUALCALIBRATION);
-
         break;
     }
+
     signalFlag = false;
   }
 
-  switch (serialSignal) {
-    case 0 ... 5:
+static void updateBottomMessageAndPresetUI(ScreenMode mode) {
+  // Modes 0..5 share the same behavior.
+  uint8_t rawSignal = serialSignal;
+  if (rawSignal <= 5) {
       if (paramChangeTimerFlag) {
         if (millis() - paramChangeLastMillis > paramHideTimeMillis) {
           lv_obj_add_flag(ui_BottomMessagePanel, LV_OBJ_FLAG_HIDDEN);
@@ -207,8 +242,20 @@ void loop1(void) {
           paramChangeFlag = false;
         }
       }
+  }
+}
 
-      if (levelBarFlag > 0) {
+static void updateLevelBars(ScreenMode mode) {
+  if (levelBarFlag == 0) {
+    return;
+  }
+
+  if (mode == ScreenMode::Silent) {
+    // In silent mode, always update all three bars.
+    lv_bar_set_value(ui_OSC1Level, OSC1Level, LV_ANIM_ON);
+    lv_bar_set_value(ui_OSC2Level, OSC2Level, LV_ANIM_ON);
+    lv_bar_set_value(ui_SUBLevel, SUBLevel, LV_ANIM_ON);
+  } else {
         switch (levelBarFlag) {
           case 1:
             lv_bar_set_value(ui_OSC1Level, OSC1Level, LV_ANIM_ON);
@@ -222,9 +269,12 @@ void loop1(void) {
           default:
             break;
         }
+  }
+
         levelBarFlag = 0;
       }
 
+static void updateADSRBars() {
       if (updateADSR1Flag) {
         lv_bar_set_value(ui_ADSR1AttackBar, 0.03125f * ADSR1Attack, LV_ANIM_ON);
         lv_bar_set_value(ui_ADSR1DecayBar, 0.03125f * ADSR1Decay, LV_ANIM_ON);
@@ -239,47 +289,46 @@ void loop1(void) {
         lv_bar_set_value(ui_ADSR2ReleaseBar, 0.03125f * ADSR2Release, LV_ANIM_ON);
         updateADSR2Flag = false;
       }
-      break;
-    case 6:
-      if (levelBarFlag > 0) {
-        lv_bar_set_value(ui_OSC1Level, OSC1Level, LV_ANIM_ON);
-        lv_bar_set_value(ui_OSC2Level, OSC2Level, LV_ANIM_ON);
-        lv_bar_set_value(ui_SUBLevel, SUBLevel, LV_ANIM_ON);
-        levelBarFlag = 0;
-      }
+}
 
-      if (updateADSR1Flag) {
-        lv_bar_set_value(ui_ADSR1AttackBar, 0.03125f * ADSR1Attack, LV_ANIM_ON);
-        lv_bar_set_value(ui_ADSR1DecayBar, 0.03125f * ADSR1Decay, LV_ANIM_ON);
-        lv_bar_set_value(ui_ADSR1SustainBar, 0.03125f * ADSR1Sustain, LV_ANIM_ON);
-        lv_bar_set_value(ui_ADSR1ReleaseBar, 0.03125f * ADSR1Release, LV_ANIM_ON);
-        updateADSR1Flag = false;
-      }
-      if (updateADSR2Flag) {
-        lv_bar_set_value(ui_ADSR2AttackBar, 0.03125f * ADSR2Attack, LV_ANIM_ON);
-        lv_bar_set_value(ui_ADSR2DecayBar, 0.03125f * ADSR2Decay, LV_ANIM_ON);
-        lv_bar_set_value(ui_ADSR2SustainBar, 0.03125f * ADSR2Sustain, LV_ANIM_ON);
-        lv_bar_set_value(ui_ADSR2ReleaseBar, 0.03125f * ADSR2Release, LV_ANIM_ON);
-        updateADSR2Flag = false;
-      }
-      break;
-    case 7:
+static void updateCalibrationUI(ScreenMode mode) {
+  switch (mode) {
+    case ScreenMode::CalibrationMenu:
       if (paramChangeFlag) {
         switch (paramNumber) {
           case 190:
             lv_tabview_set_active(ui_calibrationTabs, paramValue, LV_ANIM_ON);
+            break;
+          default:
+            break;
         }
       }
       paramChangeFlag = false;
       break;
-    case 8:
+
+    case ScreenMode::ManualCalibration:
       if (paramChangeFlag) {
         drawManualCalibration();
       }
       paramChangeFlag = false;
       break;
-  }
 
+    default:
+      // No calibration-related UI updates in other modes.
+      break;
+  }
+}
+
+void loop1(void) {
+  millisTimer();
+
+  ScreenMode mode = getScreenMode();
+
+  handleScreenModeChange(mode);
+  updateBottomMessageAndPresetUI(mode);
+  updateLevelBars(mode);
+  updateADSRBars();
+  updateCalibrationUI(mode);
 
   lv_timer_handler();
 }

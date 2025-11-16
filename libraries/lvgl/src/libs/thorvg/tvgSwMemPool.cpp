@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020 - 2023 the ThorVG project. All rights reserved.
+ * Copyright (c) 2020 - 2024 the ThorVG project. All rights reserved.
 
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -84,11 +84,16 @@ SwMpool* mpoolInit(uint32_t threads)
 {
     auto allocSize = threads + 1;
 
-    auto mpool = static_cast<SwMpool*>(calloc(sizeof(SwMpool), 1));
-    mpool->outline = static_cast<SwOutline*>(calloc(1, sizeof(SwOutline) * allocSize));
-    mpool->strokeOutline = static_cast<SwOutline*>(calloc(1, sizeof(SwOutline) * allocSize));
-    mpool->dashOutline = static_cast<SwOutline*>(calloc(1, sizeof(SwOutline) * allocSize));
+    auto mpool = static_cast<SwMpool*>(lv_zalloc(sizeof(SwMpool)));
+    LV_ASSERT_MALLOC(mpool);
+    mpool->outline = static_cast<SwOutline*>(lv_zalloc(sizeof(SwOutline) * allocSize));
+    LV_ASSERT_MALLOC(mpool->outline);
+    mpool->strokeOutline = static_cast<SwOutline*>(lv_zalloc(sizeof(SwOutline) * allocSize));
+    LV_ASSERT_MALLOC(mpool->strokeOutline);
+    mpool->dashOutline = static_cast<SwOutline*>(lv_zalloc(sizeof(SwOutline) * allocSize));
+    LV_ASSERT_MALLOC(mpool->dashOutline);
     mpool->allocSize = allocSize;
+
     return mpool;
 }
 
@@ -122,10 +127,10 @@ bool mpoolTerm(SwMpool* mpool)
 
     mpoolClear(mpool);
 
-    free(mpool->outline);
-    free(mpool->strokeOutline);
-    free(mpool->dashOutline);
-    free(mpool);
+    lv_free(mpool->outline);
+    lv_free(mpool->strokeOutline);
+    lv_free(mpool->dashOutline);
+    lv_free(mpool);
 
     return true;
 }

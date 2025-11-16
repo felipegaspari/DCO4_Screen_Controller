@@ -3,8 +3,12 @@
  *
  */
 
-#ifndef LV_SDL_DISP_H
-#define LV_SDL_DISP_H
+/**
+ * Modified by NXP in 2025
+ */
+
+#ifndef LV_SDL_WINDOW_H
+#define LV_SDL_WINDOW_H
 
 #ifdef __cplusplus
 extern "C" {
@@ -31,6 +35,8 @@ extern "C" {
  *      TYPEDEFS
  **********************/
 
+struct SDL_Window;
+
 /**********************
  * GLOBAL PROTOTYPES
  **********************/
@@ -39,21 +45,26 @@ lv_display_t * lv_sdl_window_create(int32_t hor_res, int32_t ver_res);
 
 void lv_sdl_window_set_resizeable(lv_display_t * disp, bool value);
 
-void lv_sdl_window_set_zoom(lv_display_t * disp, uint8_t zoom);
+void lv_sdl_window_set_size(lv_display_t * disp, int32_t hor_res, int32_t ver_res);
 
-uint8_t lv_sdl_window_get_zoom(lv_display_t * disp);
+void lv_sdl_window_set_zoom(lv_display_t * disp, float zoom);
 
-lv_display_t * _lv_sdl_get_disp_from_win_id(uint32_t win_id);
+float lv_sdl_window_get_zoom(lv_display_t * disp);
 
 void lv_sdl_window_set_title(lv_display_t * disp, const char * title);
 
+void lv_sdl_window_set_icon(lv_display_t * disp, void * icon, int32_t width, int32_t height);
+
 void * lv_sdl_window_get_renderer(lv_display_t * disp);
 
-void lv_sdl_quit();
+void lv_sdl_quit(void);
+
+struct SDL_Window * lv_sdl_window_get_window(lv_display_t * disp);
 
 /**********************
  *      MACROS
  **********************/
+
 
 #endif /* LV_DRV_SDL */
 
@@ -61,4 +72,4 @@ void lv_sdl_quit();
 } /* extern "C" */
 #endif
 
-#endif /* LV_SDL_DISP_H */
+#endif /* LV_SDL_WINDOW_H */

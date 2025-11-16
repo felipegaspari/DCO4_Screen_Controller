@@ -1,11 +1,12 @@
 # IoAbstraction for Arduino and mbed summary
 [![PlatformIO](https://github.com/TcMenu/IoAbstraction/actions/workflows/platformio.yml/badge.svg)](https://github.com/TcMenu/IoAbstraction/actions/workflows/platformio.yml)
+[![Test](https://github.com/TcMenu/IoAbstraction/actions/workflows/test.yml/badge.svg)](https://github.com/TcMenu/IoAbstraction/actions/workflows/test.yml)
 [![License: Apache 2.0](https://img.shields.io/badge/license-Apache--2.0-green.svg)](https://github.com/TcMenu/IoAbstraction/blob/main/LICENSE)
 [![GitHub release](https://img.shields.io/github/release/TcMenu/IoAbstraction.svg?maxAge=3600)](https://github.com/TcMenu/IoAbstraction/releases)
 [![davetcc](https://img.shields.io/badge/davetcc-dev-blue.svg)](https://github.com/davetcc)
 [![JSC TechMinds](https://img.shields.io/badge/JSC-TechMinds-green.svg)](https://www.jsctm.cz)
 
-Dave Cherry / TheCodersCorner.com made this library available for you to use. It takes me significant effort to keep all my libraries current and working on a wide range of boards. Please consider making at least a one off donation via the sponsor button if you find it useful. In forks, please keep text to here intact.
+TcMenu organisation made this framework available for you to use. It takes significant effort to keep all our libraries current and working on a wide range of boards. Please consider making at least a one off donation via the sponsor button if you find it useful. In forks, please keep text to here intact.
 
 This library provides several useful extensions that make programming Arduino / mbed for non-trivial apps simpler. There are many different practical and familiar examples packaged with it in the `examples` folder. Below I cover each of the main functions briefly with a link to more detailed documentation. The API is almost identical between Arduino and mbed making it easier to port between the two. 
 
@@ -13,8 +14,8 @@ This library provides several useful extensions that make programming Arduino / 
 
 Along with ths quick start guide and the examples also see:
 
-* [IoAbstraction documentation pages](https://www.thecoderscorner.com/products/arduino-libraries/io-abstraction/)
-* [IoAbstraction reference documentation](https://www.thecoderscorner.com/ref-docs/ioabstraction/html)
+* [IoAbstraction documentation pages](https://tcmenu.github.io/documentation/arduino-libraries/io-abstraction/)
+* [IoAbstraction reference documentation](https://tcmenu.github.io/documentation/ref-docs/ioabstraction/html)
 
 Community questions can be asked in the discussions section of this repo, or using the Arduino forum. We generally answer most community questions but the responses will not be timely. Before posting into the community make sure you've recreated the problem in a simple sketch, and please consider making at least a one time donation (see links further up):
 
@@ -271,11 +272,11 @@ Note that although the Arduino constructor allows the bit depth to be set, it on
 
 You can create matrix keyboards with any arrangement of keys, but the two most common cases of 3x4 and 4x4 layout number pads have ready-made layouts. There is an example showing usage in detail in both polling and interrupt mode on device pins and an I2C IoExpander.
 
-Alongside the example, there is comprehensive documentation describing the use of [matrix keyboards on Arduino](https://www.thecoderscorner.com/products/arduino-libraries/io-abstraction/matrix-keyboard-keypad-manager/).  
+Alongside the example, there is comprehensive documentation describing the use of [matrix keyboards on Arduino](https://tcmenu.github.io/documentation/arduino-libraries/io-abstraction/matrix-keyboard-keypad-manager/).  
 
-## Inbuilt Unit testing framework and mocking
+## Unit testing and mocking
 
-IoAbstraction has a very simple unit test framework built into it, it works on a very wide range of boards, more or less everything in our supported list. In addition to this there are mock versions of some components to make testing your code easier. See https://www.thecoderscorner.com/products/arduino-libraries/io-abstraction/simple-test-unit-test-arduino-mbed/
+There are mock versions of some components to make testing your code easier. Consult the source and documentation for more detail.
 
 ## ESP32 extras mode
 

@@ -15,8 +15,6 @@ extern "C" {
  *********************/
 #include "../lv_conf_internal.h"
 
-#include <stdbool.h>
-
 #include "../misc/lv_types.h"
 #include "../draw/lv_draw.h"
 #if LV_USE_DRAW_SW
@@ -29,15 +27,30 @@ extern "C" {
 #include "../misc/lv_log.h"
 #include "../misc/lv_style.h"
 #include "../misc/lv_timer.h"
+#include "../osal/lv_os_private.h"
 #include "../others/sysmon/lv_sysmon.h"
 #include "../stdlib/builtin/lv_tlsf.h"
 
 #if LV_USE_FONT_COMPRESSED
-#include "../font/lv_font_fmt_txt.h"
+#include "../font/lv_font_fmt_txt_private.h"
 #endif
 
 #include "../tick/lv_tick.h"
 #include "../layouts/lv_layout.h"
+
+#include "../misc/lv_types.h"
+
+#include "../misc/lv_timer_private.h"
+#include "../misc/lv_anim_private.h"
+#include "../tick/lv_tick_private.h"
+#include "../draw/lv_draw_buf_private.h"
+#include "../draw/lv_draw_private.h"
+#include "../draw/sw/lv_draw_sw_private.h"
+#include "../draw/sw/lv_draw_sw_mask_private.h"
+#include "../stdlib/builtin/lv_tlsf_private.h"
+#include "../others/sysmon/lv_sysmon_private.h"
+#include "../others/test/lv_test_private.h"
+#include "../layouts/lv_layout_private.h"
 
 /*********************
  *      DEFINES
@@ -65,6 +78,14 @@ struct _lv_nuttx_ctx_t;
 #endif
 
 typedef struct _lv_global_t {
+    /**
+     * User data for the LVGL library. Move from the bottom of the struct
+     * to avoid breaking the ABI. E.g., if the user data is used by a
+     * closed-source library, this can help to avoid re-compiling the library
+     * when the lvgl-related configs are changed.
+     */
+    void * user_data;
+
     bool inited;
     bool deinit_in_progress;     /**< Can be used e.g. in the LV_EVENT_DELETE to deinit the drivers too */
 
@@ -100,23 +121,26 @@ typedef struct _lv_global_t {
     lv_tick_state_t tick_state;
 
     lv_draw_buf_handlers_t draw_buf_handlers;
+    lv_draw_buf_handlers_t font_draw_buf_handlers;
+    lv_draw_buf_handlers_t image_cache_draw_buf_handlers;  /**< Ensure that all assigned draw buffers
+                                                            * can be managed by image cache. */
 
     lv_ll_t img_decoder_ll;
+#if LV_USE_OS != LV_OS_NONE
+    lv_mutex_t img_decoder_info_lock;
+    lv_mutex_t img_decoder_open_lock;
+#endif
 
-#if LV_CACHE_DEF_SIZE > 0
     lv_cache_t * img_cache;
-#endif
-
-#if LV_IMAGE_HEADER_CACHE_DEF_CNT > 0
     lv_cache_t * img_header_cache;
-#endif
 
     lv_draw_global_info_t draw_info;
+    lv_ll_t draw_sw_blend_handler_ll;
 #if defined(LV_DRAW_SW_SHADOW_CACHE_SIZE) && LV_DRAW_SW_SHADOW_CACHE_SIZE > 0
     lv_draw_sw_shadow_cache_t sw_shadow_cache;
 #endif
 #if LV_DRAW_SW_COMPLEX
-    _lv_draw_sw_mask_radius_circle_dsc_arr_t sw_circle_cache;
+    lv_draw_sw_mask_radius_circle_dsc_arr_t sw_circle_cache;
 #endif
 
 #if LV_USE_LOG
@@ -159,16 +183,28 @@ typedef struct _lv_global_t {
     lv_fs_drv_t win32_fs_drv;
 #endif
 
+#if LV_USE_FS_UEFI
+    lv_fs_drv_t uefi_fs_drv;
+#endif
+
 #if LV_USE_FS_LITTLEFS
     lv_fs_drv_t littlefs_fs_drv;
 #endif
 
-#if LV_USE_FREETYPE
-    struct _lv_freetype_context_t * ft_context;
+#if LV_USE_FS_ARDUINO_ESP_LITTLEFS
+    lv_fs_drv_t arduino_esp_littlefs_fs_drv;
 #endif
 
-#if LV_USE_TINY_TTF
-    lv_cache_t * tiny_ttf_cache;
+#if LV_USE_FS_ARDUINO_SD
+    lv_fs_drv_t arduino_sd_fs_drv;
+#endif
+
+#if LV_USE_FS_FROGFS
+    lv_fs_drv_t frogfs_fs_drv;
+#endif
+
+#if LV_USE_FREETYPE
+    struct _lv_freetype_context_t * ft_context;
 #endif
 
 #if LV_USE_FONT_COMPRESSED
@@ -183,15 +219,13 @@ typedef struct _lv_global_t {
     struct _lv_profiler_builtin_ctx_t * profiler_context;
 #endif
 
-#if LV_USE_FILE_EXPLORER != 0
-    lv_style_t fe_list_button_style;
+
+#if LV_USE_FILE_EXPLORER
+    lv_style_t file_explorer_quick_access_style;
+    size_t file_explorer_count;
 #endif
 
-#if LV_USE_SYSMON && LV_USE_PERF_MONITOR
-    lv_sysmon_backend_data_t sysmon_perf;
-#endif
-
-#if LV_USE_SYSMON && LV_USE_MEM_MONITOR
+#if LV_USE_MEM_MONITOR
     lv_sysmon_backend_data_t sysmon_mem;
 #endif
 
@@ -204,11 +238,51 @@ typedef struct _lv_global_t {
     uint32_t objid_count;
 #endif
 
+#if LV_USE_TEST
+    lv_test_state_t test_state;
+#endif
+
+#if LV_USE_TRANSLATION
+    lv_ll_t translation_packs_ll;
+    const char * translation_selected_lang;
+#endif
+
 #if LV_USE_NUTTX
     struct _lv_nuttx_ctx_t * nuttx_ctx;
 #endif
 
-    void * user_data;
+#if LV_USE_OS != LV_OS_NONE
+    lv_mutex_t lv_general_mutex;
+#endif
+
+#if defined(__linux__)
+    lv_linux_proc_stat_t linux_last_proc_stat;
+#if LV_SYSMON_PROC_IDLE_AVAILABLE
+    uint64_t linux_last_self_proc_time_ticks;
+    lv_linux_proc_stat_t linux_last_system_total_ticks_stat;
+#endif
+#endif
+
+#if LV_USE_OS == LV_OS_FREERTOS
+    uint32_t freertos_idle_time_sum;
+    uint32_t freertos_non_idle_time_sum;
+    uint32_t freertos_task_switch_timestamp;
+    bool freertos_idle_task_running;
+#endif
+
+#if LV_USE_EVDEV
+    lv_evdev_discovery_t * evdev_discovery;
+#endif
+
+#if LV_USE_XML
+    const char * xml_path_prefix;
+    uint32_t lv_event_xml_store_timeline;
+    lv_ll_t xml_loads;
+#endif
+
+#if LV_USE_DRAW_EVE
+    lv_draw_eve_unit_t * draw_eve_unit;
+#endif
 } lv_global_t;
 
 /**********************

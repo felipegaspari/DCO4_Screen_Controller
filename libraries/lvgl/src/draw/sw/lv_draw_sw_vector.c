@@ -1,11 +1,14 @@
 /**
- * @file lv_draw_img.c
+ * @file lv_draw_sw_vector.c
  *
  */
 
 /*********************
  *      INCLUDES
  *********************/
+#include "../lv_image_decoder_private.h"
+#include "../lv_draw_vector_private.h"
+#include "../lv_draw_private.h"
 #include "lv_draw_sw.h"
 
 #if LV_USE_VECTOR_GRAPHIC && LV_USE_THORVG
@@ -15,6 +18,9 @@
     #include "../../libs/thorvg/thorvg_capi.h"
 #endif
 #include "../../stdlib/lv_string.h"
+#include "blend/lv_draw_sw_blend_private.h"
+#include "blend/lv_draw_sw_blend_to_rgb565.h"
+#include "blend/lv_draw_sw_blend_to_rgb888.h"
 
 /*********************
  *      DEFINES
@@ -37,6 +43,13 @@ typedef struct {
     uint8_t a;
 } _tvg_color;
 
+typedef struct {
+    Tvg_Canvas * canvas;
+    int32_t partial_y_offset;
+    int32_t translate_x;
+    int32_t translate_y;
+    lv_opa_t opa;
+} _tvg_draw_state;
 /**********************
  *  STATIC PROTOTYPES
  **********************/
@@ -49,7 +62,7 @@ typedef struct {
  *      MACROS
  **********************/
 
-static void _lv_area_to_tvg(_tvg_rect * rect, const lv_area_t * area)
+static void lv_area_to_tvg(_tvg_rect * rect, const lv_area_t * area)
 {
     rect->x = area->x1;
     rect->y = area->y1;
@@ -57,7 +70,7 @@ static void _lv_area_to_tvg(_tvg_rect * rect, const lv_area_t * area)
     rect->h = lv_area_get_height(area);
 }
 
-static void _lv_color_to_tvg(_tvg_color * color, const lv_color32_t * c, lv_opa_t opa)
+static void lv_color_to_tvg(_tvg_color * color, const lv_color32_t * c, lv_opa_t opa)
 {
     color->r = c->red;
     color->g = c->green;
@@ -65,7 +78,7 @@ static void _lv_color_to_tvg(_tvg_color * color, const lv_color32_t * c, lv_opa_
     color->a = LV_OPA_MIX2(c->alpha, opa);
 }
 
-static void _lv_matrix_to_tvg(Tvg_Matrix * tm, const lv_matrix_t * m)
+static void lv_matrix_to_tvg(Tvg_Matrix * tm, const lv_matrix_t * m)
 {
     tm->e11 = m->m[0][0];
     tm->e12 = m->m[0][1];
@@ -135,7 +148,7 @@ static void _set_paint_shape(Tvg_Paint * obj, const lv_vector_path_t * p)
     }
 }
 
-static Tvg_Stroke_Cap _lv_stroke_cap_to_tvg(lv_vector_stroke_cap_t cap)
+static Tvg_Stroke_Cap lv_stroke_cap_to_tvg(lv_vector_stroke_cap_t cap)
 {
     switch(cap) {
         case LV_VECTOR_STROKE_CAP_SQUARE:
@@ -149,7 +162,7 @@ static Tvg_Stroke_Cap _lv_stroke_cap_to_tvg(lv_vector_stroke_cap_t cap)
     }
 }
 
-static Tvg_Stroke_Join _lv_stroke_join_to_tvg(lv_vector_stroke_join_t join)
+static Tvg_Stroke_Join lv_stroke_join_to_tvg(lv_vector_stroke_join_t join)
 {
     switch(join) {
         case LV_VECTOR_STROKE_JOIN_BEVEL:
@@ -163,7 +176,7 @@ static Tvg_Stroke_Join _lv_stroke_join_to_tvg(lv_vector_stroke_join_t join)
     }
 }
 
-static Tvg_Stroke_Fill _lv_spread_to_tvg(lv_vector_gradient_spread_t sp)
+static Tvg_Stroke_Fill lv_spread_to_tvg(lv_vector_gradient_spread_t sp)
 {
     switch(sp) {
         case LV_VECTOR_GRADIENT_SPREAD_PAD:
@@ -180,10 +193,10 @@ static Tvg_Stroke_Fill _lv_spread_to_tvg(lv_vector_gradient_spread_t sp)
 static void _setup_gradient(Tvg_Gradient * gradient, const lv_vector_gradient_t * grad,
                             const lv_matrix_t * matrix)
 {
-    const lv_grad_dsc_t * g = &grad->grad;
-    Tvg_Color_Stop * stops = (Tvg_Color_Stop *)lv_malloc(sizeof(Tvg_Color_Stop) * g->stops_count);
-    for(uint8_t i = 0; i < g->stops_count; i++) {
-        const lv_gradient_stop_t * s = &(g->stops[i]);
+    Tvg_Color_Stop * stops = (Tvg_Color_Stop *)lv_malloc(sizeof(Tvg_Color_Stop) * grad->stops_count);
+    LV_ASSERT_MALLOC(stops);
+    for(uint16_t i = 0; i < grad->stops_count; i++) {
+        const lv_grad_stop_t * s = &(grad->stops[i]);
 
         stops[i].offset = s->frac / 255.0f;
         stops[i].r = s->color.red;
@@ -192,36 +205,26 @@ static void _setup_gradient(Tvg_Gradient * gradient, const lv_vector_gradient_t 
         stops[i].a = s->opa;
     }
 
-    tvg_gradient_set_color_stops(gradient, stops, g->stops_count);
-    tvg_gradient_set_spread(gradient, _lv_spread_to_tvg(grad->spread));
+    tvg_gradient_set_color_stops(gradient, stops, grad->stops_count);
+    tvg_gradient_set_spread(gradient, lv_spread_to_tvg(grad->spread));
     Tvg_Matrix mtx;
-    _lv_matrix_to_tvg(&mtx, matrix);
+    lv_matrix_to_tvg(&mtx, matrix);
     tvg_gradient_set_transform(gradient, &mtx);
     lv_free(stops);
 }
 
 static void _set_paint_stroke_gradient(Tvg_Paint * obj, const lv_vector_gradient_t * g, const lv_matrix_t * m)
 {
-    float x, y, w, h;
-    tvg_paint_get_bounds(obj, &x, &y, &w, &h, false);
-
     Tvg_Gradient * grad = NULL;
     if(g->style == LV_VECTOR_GRADIENT_STYLE_RADIAL) {
         grad = tvg_radial_gradient_new();
-        tvg_radial_gradient_set(grad, g->cx + x, g->cy + y, g->cr);
+        tvg_radial_gradient_set(grad, g->cx, g->cy, g->cr);
         _setup_gradient(grad, g, m);
         tvg_shape_set_stroke_radial_gradient(obj, grad);
     }
     else {
         grad = tvg_linear_gradient_new();
-
-        if(g->grad.dir == LV_GRAD_DIR_VER) {
-            tvg_linear_gradient_set(grad, x, y, x, y + h);
-        }
-        else {
-            tvg_linear_gradient_set(grad, x, y, x + w, y);
-        }
-
+        tvg_linear_gradient_set(grad, g->x1, g->y1, g->x2, g->y2);
         _setup_gradient(grad, g, m);
         tvg_shape_set_stroke_linear_gradient(obj, grad);
     }
@@ -231,7 +234,7 @@ static void _set_paint_stroke(Tvg_Paint * obj, const lv_vector_stroke_dsc_t * ds
 {
     if(dsc->style == LV_VECTOR_DRAW_STYLE_SOLID) {
         _tvg_color c;
-        _lv_color_to_tvg(&c, &dsc->color, dsc->opa);
+        lv_color_to_tvg(&c, &dsc->color, dsc->opa);
         tvg_shape_set_stroke_color(obj, c.r, c.g, c.b, c.a);
     }
     else {   /*gradient*/
@@ -240,8 +243,8 @@ static void _set_paint_stroke(Tvg_Paint * obj, const lv_vector_stroke_dsc_t * ds
 
     tvg_shape_set_stroke_width(obj, dsc->width);
     tvg_shape_set_stroke_miterlimit(obj, dsc->miter_limit);
-    tvg_shape_set_stroke_cap(obj, _lv_stroke_cap_to_tvg(dsc->cap));
-    tvg_shape_set_stroke_join(obj, _lv_stroke_join_to_tvg(dsc->join));
+    tvg_shape_set_stroke_cap(obj, lv_stroke_cap_to_tvg(dsc->cap));
+    tvg_shape_set_stroke_join(obj, lv_stroke_join_to_tvg(dsc->join));
 
     if(!lv_array_is_empty(&dsc->dash_pattern)) {
         float * dash_array = lv_array_front(&dsc->dash_pattern);
@@ -249,7 +252,7 @@ static void _set_paint_stroke(Tvg_Paint * obj, const lv_vector_stroke_dsc_t * ds
     }
 }
 
-static Tvg_Fill_Rule _lv_fill_rule_to_tvg(lv_vector_fill_t rule)
+static Tvg_Fill_Rule lv_fill_rule_to_tvg(lv_vector_fill_t rule)
 {
     switch(rule) {
         case LV_VECTOR_FILL_NONZERO:
@@ -263,36 +266,27 @@ static Tvg_Fill_Rule _lv_fill_rule_to_tvg(lv_vector_fill_t rule)
 
 static void _set_paint_fill_gradient(Tvg_Paint * obj, const lv_vector_gradient_t * g, const lv_matrix_t * m)
 {
-    float x, y, w, h;
-    tvg_paint_get_bounds(obj, &x, &y, &w, &h, false);
-
     Tvg_Gradient * grad = NULL;
     if(g->style == LV_VECTOR_GRADIENT_STYLE_RADIAL) {
         grad = tvg_radial_gradient_new();
-        tvg_radial_gradient_set(grad, g->cx + x, g->cy + y, g->cr);
+        tvg_radial_gradient_set(grad, g->cx, g->cy, g->cr);
         _setup_gradient(grad, g, m);
         tvg_shape_set_radial_gradient(obj, grad);
     }
     else {
         grad = tvg_linear_gradient_new();
-
-        if(g->grad.dir == LV_GRAD_DIR_VER) {
-            tvg_linear_gradient_set(grad, x, y, x, y + h);
-        }
-        else {
-            tvg_linear_gradient_set(grad, x, y, x + w, y);
-        }
-
+        tvg_linear_gradient_set(grad, g->x1, g->y1, g->x2, g->y2);
         _setup_gradient(grad, g, m);
         tvg_shape_set_linear_gradient(obj, grad);
     }
 }
 
 static void _set_paint_fill_pattern(Tvg_Paint * obj, Tvg_Canvas * canvas, const lv_draw_image_dsc_t * p,
-                                    const lv_matrix_t * m)
+                                    const lv_matrix_t * m, const lv_opa_t opa)
 {
     lv_image_decoder_dsc_t decoder_dsc;
     lv_image_decoder_args_t args = { 0 };
+    args.premultiply = 1;
     lv_result_t res = lv_image_decoder_open(&decoder_dsc, p->src, &args);
     if(res != LV_RESULT_OK) {
         LV_LOG_ERROR("Failed to open image");
@@ -305,7 +299,6 @@ static void _set_paint_fill_pattern(Tvg_Paint * obj, Tvg_Canvas * canvas, const 
         return;
     }
 
-    const uint8_t * src_buf = decoder_dsc.decoded->data;
     const lv_image_header_t * header = &decoder_dsc.decoded->header;
     lv_color_format_t cf = header->cf;
 
@@ -315,45 +308,62 @@ static void _set_paint_fill_pattern(Tvg_Paint * obj, Tvg_Canvas * canvas, const 
         return;
     }
 
+    const uint32_t tvg_stride = header->w * sizeof(uint32_t);
+    if(header->stride != tvg_stride) {
+        LV_LOG_WARN("img_stride != tvg_stride (%" LV_PRIu32 " != %" LV_PRIu32 "), width = %" LV_PRIu32,
+                    (uint32_t)header->stride,
+                    tvg_stride, (uint32_t)header->w);
+        lv_result_t result = lv_draw_buf_adjust_stride((lv_draw_buf_t *)decoder_dsc.decoded, tvg_stride);
+        if(result != LV_RESULT_OK) {
+            lv_image_decoder_close(&decoder_dsc);
+            LV_LOG_ERROR("Failed to adjust stride");
+            return;
+        }
+    }
+
     Tvg_Paint * img = tvg_picture_new();
-    tvg_picture_load_raw(img, (uint32_t *)src_buf, header->w, header->h, true);
+    tvg_picture_load_raw(img, (uint32_t *)decoder_dsc.decoded->data, header->w, header->h, true);
     Tvg_Paint * clip_path = tvg_paint_duplicate(obj);
     tvg_paint_set_composite_method(img, clip_path, TVG_COMPOSITE_METHOD_CLIP_PATH);
-    tvg_paint_set_opacity(img, p->opa);
+    tvg_paint_set_opacity(img, LV_UDIV255(p->opa * opa));
 
     Tvg_Matrix mtx;
-    _lv_matrix_to_tvg(&mtx, m);
+    lv_matrix_to_tvg(&mtx, m);
     tvg_paint_set_transform(img, &mtx);
     tvg_canvas_push(canvas, img);
     lv_image_decoder_close(&decoder_dsc);
 }
 
 static void _set_paint_fill(Tvg_Paint * obj, Tvg_Canvas * canvas, const lv_vector_fill_dsc_t * dsc,
-                            const lv_matrix_t * matrix)
+                            const lv_matrix_t * matrix, const lv_opa_t opa)
 {
-    tvg_shape_set_fill_rule(obj, _lv_fill_rule_to_tvg(dsc->fill_rule));
+    tvg_shape_set_fill_rule(obj, lv_fill_rule_to_tvg(dsc->fill_rule));
 
     if(dsc->style == LV_VECTOR_DRAW_STYLE_SOLID) {
         _tvg_color c;
-        _lv_color_to_tvg(&c, &dsc->color, dsc->opa);
+        lv_color_to_tvg(&c, &dsc->color, dsc->opa);
         tvg_shape_set_fill_color(obj, c.r, c.g, c.b, c.a);
     }
     else if(dsc->style == LV_VECTOR_DRAW_STYLE_PATTERN) {
-        float x, y, w, h;
-        tvg_paint_get_bounds(obj, &x, &y, &w, &h, false);
+        lv_matrix_t imx = *matrix;
 
-        lv_matrix_t imx;
-        lv_memcpy(&imx, matrix, sizeof(lv_matrix_t));
-        lv_matrix_translate(&imx, x, y);
+        if(dsc->fill_units == LV_VECTOR_FILL_UNITS_OBJECT_BOUNDING_BOX) {
+            /* Convert to object bounding box coordinates */
+            float x, y, w, h;
+            tvg_paint_get_bounds(obj, &x, &y, &w, &h, false);
+            lv_matrix_translate(&imx, x, y);
+        }
+
         lv_matrix_multiply(&imx, &dsc->matrix);
-        _set_paint_fill_pattern(obj, canvas, &dsc->img_dsc, &imx);
+
+        _set_paint_fill_pattern(obj, canvas, &dsc->img_dsc, &imx, opa);
     }
     else if(dsc->style == LV_VECTOR_DRAW_STYLE_GRADIENT) {
         _set_paint_fill_gradient(obj, &dsc->gradient, &dsc->matrix);
     }
 }
 
-static Tvg_Blend_Method _lv_blend_to_tvg(lv_vector_blend_t blend)
+static Tvg_Blend_Method lv_blend_to_tvg(lv_vector_blend_t blend)
 {
     switch(blend) {
         case LV_VECTOR_BLEND_SRC_OVER:
@@ -378,21 +388,60 @@ static Tvg_Blend_Method _lv_blend_to_tvg(lv_vector_blend_t blend)
 
 static void _set_paint_blend_mode(Tvg_Paint * obj, lv_vector_blend_t blend)
 {
-    tvg_paint_set_blend_method(obj, _lv_blend_to_tvg(blend));
+    tvg_paint_set_blend_method(obj, lv_blend_to_tvg(blend));
 }
 
-static void _task_draw_cb(void * ctx, const lv_vector_path_t * path, const lv_vector_draw_dsc_t * dsc)
+static void _blend_draw_buf(lv_draw_buf_t * draw_buf, const lv_area_t * dst_area, const lv_draw_buf_t * new_buf,
+                            const lv_area_t * src_area)
 {
-    Tvg_Canvas * canvas = (Tvg_Canvas *)ctx;
+    lv_draw_sw_blend_image_dsc_t fill_dsc;
+    fill_dsc.dest_w = src_area->x2;
+    fill_dsc.dest_h = src_area->y2;
+    fill_dsc.dest_stride = draw_buf->header.stride;
+    fill_dsc.dest_buf = draw_buf->data;
+
+    fill_dsc.opa = LV_OPA_100;
+    fill_dsc.blend_mode = LV_BLEND_MODE_NORMAL;
+    fill_dsc.src_stride = new_buf->header.stride;
+    fill_dsc.src_color_format = new_buf->header.cf;
+    fill_dsc.src_buf = new_buf->data;
+
+    fill_dsc.mask_buf = NULL;
+    fill_dsc.mask_stride = 0;
+
+    fill_dsc.relative_area = *dst_area;
+    fill_dsc.src_area  = *src_area;
+
+    switch(draw_buf->header.cf) {
+#if LV_DRAW_SW_SUPPORT_RGB565
+        case LV_COLOR_FORMAT_RGB565:
+        case LV_COLOR_FORMAT_RGB565A8:
+            lv_draw_sw_blend_image_to_rgb565(&fill_dsc);
+            break;
+#endif
+#if LV_DRAW_SW_SUPPORT_RGB888
+        case LV_COLOR_FORMAT_RGB888:
+            lv_draw_sw_blend_image_to_rgb888(&fill_dsc, 3);
+            break;
+#endif
+        default:
+            break;
+    }
+}
+
+static void _task_draw_cb(void * ctx, const lv_vector_path_t * path, const lv_vector_path_ctx_t * dsc)
+{
+    _tvg_draw_state * state = (_tvg_draw_state *)ctx;
+    Tvg_Canvas * canvas = (Tvg_Canvas *)state->canvas;
 
     Tvg_Paint * obj = tvg_shape_new();
 
-    if(!path) {  /*clear*/
-        _tvg_rect rc;
-        _lv_area_to_tvg(&rc, &dsc->scissor_area);
+    _tvg_rect rc;
+    lv_area_to_tvg(&rc, &dsc->scissor_area);
 
+    if(!path) {  /*clear*/
         _tvg_color c;
-        _lv_color_to_tvg(&c, &dsc->fill_dsc.color, dsc->fill_dsc.opa);
+        lv_color_to_tvg(&c, &dsc->fill_dsc.color, dsc->fill_dsc.opa);
 
         Tvg_Matrix mtx = {
             1.0f, 0.0f, 0.0f,
@@ -400,31 +449,37 @@ static void _task_draw_cb(void * ctx, const lv_vector_path_t * path, const lv_ve
             0.0f, 0.0f, 1.0f,
         };
         _set_paint_matrix(obj, &mtx);
-        tvg_shape_append_rect(obj, rc.x, rc.y, rc.w, rc.h, 0, 0);
+        tvg_shape_append_rect(obj, rc.x + state->translate_x, rc.y + state->translate_y, rc.w, rc.h, 0, 0);
         tvg_shape_set_fill_color(obj, c.r, c.g, c.b, c.a);
     }
     else {
+        tvg_canvas_set_viewport(canvas, (int32_t)rc.x + state->translate_x, (int32_t)rc.y + state->translate_y,
+                                (int32_t)rc.w, (int32_t)rc.h);
+
+        lv_matrix_t matrix;
+        lv_matrix_identity(&matrix);
+        lv_matrix_translate(&matrix, state->translate_x, state->translate_y);
+        lv_matrix_multiply(&matrix, &dsc->matrix);
         Tvg_Matrix mtx;
-        _lv_matrix_to_tvg(&mtx, &dsc->matrix);
+        lv_matrix_to_tvg(&mtx, &matrix);
         _set_paint_matrix(obj, &mtx);
 
         _set_paint_shape(obj, path);
 
-        _set_paint_fill(obj, canvas, &dsc->fill_dsc, &dsc->matrix);
+        _set_paint_fill(obj, canvas, &dsc->fill_dsc, &matrix, state->opa);
         _set_paint_stroke(obj, &dsc->stroke_dsc);
         _set_paint_blend_mode(obj, dsc->blend_mode);
     }
-
+    tvg_paint_set_opacity(obj, state->opa);
     tvg_canvas_push(canvas, obj);
 }
 
 /**********************
  *   GLOBAL FUNCTIONS
  **********************/
-void lv_draw_sw_vector(lv_draw_unit_t * draw_unit, const lv_draw_vector_task_dsc_t * dsc)
-{
-    LV_UNUSED(draw_unit);
 
+void lv_draw_sw_vector(lv_draw_task_t * t, lv_draw_vector_dsc_t * dsc)
+{
     if(dsc->task_list == NULL)
         return;
 
@@ -433,26 +488,45 @@ void lv_draw_sw_vector(lv_draw_unit_t * draw_unit, const lv_draw_vector_task_dsc
     if(draw_buf == NULL)
         return;
 
-    lv_color_format_t cf = draw_buf->header.cf;
-
-    if(cf != LV_COLOR_FORMAT_ARGB8888 && \
-       cf != LV_COLOR_FORMAT_XRGB8888) {
-        LV_LOG_ERROR("unsupported layer color: %d", cf);
-        return;
-    }
-
     void * buf = draw_buf->data;
     int32_t width = lv_area_get_width(&layer->buf_area);
     int32_t height = lv_area_get_height(&layer->buf_area);
     uint32_t stride = draw_buf->header.stride;
+
+    lv_color_format_t cf = draw_buf->header.cf;
+
+    bool allow_buffer = false;
+    lv_draw_buf_t * new_buf = NULL;
+
+    if(cf != LV_COLOR_FORMAT_ARGB8888 && \
+       cf != LV_COLOR_FORMAT_XRGB8888) {
+        allow_buffer = true;
+        new_buf = lv_draw_buf_create(width, height, LV_COLOR_FORMAT_ARGB8888, LV_STRIDE_AUTO);
+        lv_draw_buf_clear(new_buf, NULL);
+        buf = new_buf->data;
+        stride = new_buf->header.stride;
+    }
     Tvg_Canvas * canvas = tvg_swcanvas_create();
     tvg_swcanvas_set_target(canvas, buf, stride / 4, width, height, TVG_COLORSPACE_ARGB8888);
 
+    _tvg_rect rc;
+    lv_area_to_tvg(&rc, &t->clip_area);
+    tvg_canvas_set_viewport(canvas, (int32_t)rc.x, (int32_t)(rc.y - layer->partial_y_offset), (int32_t)rc.w, (int32_t)rc.h);
+
+    _tvg_draw_state state = {canvas, layer->partial_y_offset, -layer->buf_area.x1, -layer->buf_area.y1, t->opa};
+
     lv_ll_t * task_list = dsc->task_list;
-    _lv_vector_for_each_destroy_tasks(task_list, _task_draw_cb, canvas);
+    lv_vector_for_each_destroy_tasks(task_list, _task_draw_cb, &state);
+    dsc->task_list = NULL;
 
     if(tvg_canvas_draw(canvas) == TVG_RESULT_SUCCESS) {
         tvg_canvas_sync(canvas);
+    }
+
+    if(allow_buffer) {
+        lv_area_t src_area = {0, 0, width, height};
+        _blend_draw_buf(draw_buf, &layer->buf_area, new_buf, &src_area);
+        lv_draw_buf_destroy(new_buf);
     }
 
     tvg_canvas_destroy(canvas);

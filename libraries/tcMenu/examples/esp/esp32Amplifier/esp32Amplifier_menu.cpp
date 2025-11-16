@@ -8,9 +8,11 @@
     use elsewhere.
  */
 
+// Generated for Arduino ESP32 by TcMenu 4.3.1 on 2024-09-28T08:52:55.511970600Z.
+
 #include <tcMenu.h>
 #include "esp32Amplifier_menu.h"
-#include "ThemeCoolBlueModern.h"
+#include "ThemeCoolBlueModernBuilder.h"
 
 // Global variable declarations
 const PROGMEM  ConnectorLocalInfo applicationInfo = { "ESP Amplifier", "4656c798-10c6-4110-8e03-b9c51ed8fffb" };
@@ -24,9 +26,9 @@ iotouch::ResistiveTouchInterrogator touchInterrogator(2, 33, 32, 0);
 iotouch::TouchOrientationSettings touchOrientation(true, false, true);
 MenuTouchScreenManager touchScreen(&touchInterrogator, &renderer, touchOrientation);
 tcextras::IoaTouchScreenCalibrator touchCalibrator(&touchScreen, &renderer, 400);
-ClientEthernetInitialisation ethernetInitialisation("192.168.0.37", 3333);
-ClientEthernetTagValTransport ethernetTransport;
-TagValueRemoteServerConnection ethernetConnection(ethernetTransport, ethernetInitialisation);
+ClientEthernetInitialisation clientEthInit(myIpAddress, 3333);
+ClientEthernetTagValTransport clientEthTransport;
+TagValueRemoteServerConnection clientConnection(clientEthTransport, clientEthInit);
 
 // Global Menu Item declarations
 const PROGMEM char pgmStrConnectivityAuthenticatorText[] = { "Authenticator" };
@@ -110,10 +112,8 @@ void setupMenu() {
     renderer.setUpdatesPerSecond(10);
     touchScreen.start();
     menuMgr.initWithoutInput(&renderer, &menuVolume);
-    remoteServer.addConnection(&ethernetConnection);
-    renderer.setTitleMode(BaseGraphicalRenderer::TITLE_ALWAYS);
-    renderer.setUseSliderForAnalog(true);
-    installCoolBlueModernTheme(renderer, MenuFontDef(nullptr, 4), MenuFontDef(nullptr, 4), false);
+    remoteServer.addConnection(&clientConnection);
+    installCoolBlueModernTheme(renderer, MenuFontDef(nullptr, 4), MenuFontDef(nullptr, 4), false, BaseGraphicalRenderer::TITLE_ALWAYS, false);
 
     // We have an IoT monitor, register the server
     menuConnectivityIoTMonitor.setRemoteServer(remoteServer);

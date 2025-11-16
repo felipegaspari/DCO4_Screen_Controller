@@ -35,13 +35,9 @@ extern GraphicsDeviceRenderer renderer;
 extern iotouch::ResistiveTouchInterrogator touchInterrogator;
 extern MenuTouchScreenManager touchScreen;
 extern tcextras::IoaTouchScreenCalibrator touchCalibrator;
-extern WiFiServer server;
-extern ClientEthernetInitialisation ethernetInitialisation;
-
-
-extern EepromAuthenticatorManager authManager;
-
-
+extern const char* myIpAddress;
+extern ClientEthernetInitialisation clientEthInit;
+extern ClientEthernetTagValTransport clientEthTransport;
 
 // Any externals needed by IO expanders, EEPROMs etc
 

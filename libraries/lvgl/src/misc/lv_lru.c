@@ -88,7 +88,7 @@ lv_lru_t * lv_lru_create(size_t cache_size, size_t average_length, lv_lru_free_c
     cache->value_free = value_free ? value_free : lv_free;
     cache->key_free = key_free ? key_free : lv_free;
 
-    // size the hash table to a guestimate of the number of slots required (assuming a perfect hash)
+    // size the hash table to a guesstimate of the number of slots required (assuming a perfect hash)
     cache->items = lv_malloc_zeroed(sizeof(lv_lru_item_t *) * cache->hash_table_size);
     if(!cache->items) {
         LV_LOG_WARN("LRU Cache unable to create cache hash table");
@@ -164,7 +164,7 @@ lv_lru_res_t lv_lru_set(lv_lru_t * cache, const void * key, size_t key_length, v
         item = lv_lru_pop_or_create_item(cache);
         item->value = value;
         item->key = lv_malloc(key_length);
-        memcpy(item->key, key, key_length);
+        lv_memcpy(item->key, key, key_length);
         item->value_length = value_length;
         item->key_length = key_length;
         required = (int) value_length;
@@ -303,7 +303,7 @@ static int lv_lru_cmp_keys(lv_lru_item_t * item, const void * key, uint32_t key_
         return 1;
     }
     else {
-        return memcmp(key, item->key, key_length);
+        return lv_memcmp(key, item->key, key_length);
     }
 }
 

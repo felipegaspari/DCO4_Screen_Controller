@@ -6,12 +6,17 @@
 /*********************
  *      INCLUDES
  *********************/
-#include "lv_bar.h"
+#include "lv_bar_private.h"
+#include "../../misc/lv_area_private.h"
+#include "../../draw/lv_draw_mask_private.h"
+#include "../../core/lv_obj_private.h"
+#include "../../core/lv_obj_class_private.h"
 #if LV_USE_BAR != 0
 
 #include "../../draw/lv_draw.h"
+#include "../../others/observer/lv_observer_private.h"
 #include "../../misc/lv_assert.h"
-#include "../../misc/lv_anim.h"
+#include "../../misc/lv_anim_private.h"
 #include "../../misc/lv_math.h"
 
 /*********************
@@ -49,10 +54,14 @@ static void lv_bar_destructor(const lv_obj_class_t * class_p, lv_obj_t * obj);
 static void lv_bar_event(const lv_obj_class_t * class_p, lv_event_t * e);
 static void draw_indic(lv_event_t * e);
 static void lv_bar_set_value_with_anim(lv_obj_t * obj, int32_t new_value, int32_t * value_ptr,
-                                       _lv_bar_anim_t * anim_info, lv_anim_enable_t en);
-static void lv_bar_init_anim(lv_obj_t * bar, _lv_bar_anim_t * bar_anim);
+                                       lv_bar_anim_t * anim_info, lv_anim_enable_t en);
+static void lv_bar_init_anim(lv_obj_t * bar, lv_bar_anim_t * bar_anim);
 static void lv_bar_anim(void * bar, int32_t value);
 static void lv_bar_anim_completed(lv_anim_t * a);
+
+#if LV_USE_OBSERVER
+    static void bar_value_observer_cb(lv_observer_t * observer, lv_subject_t * subject);
+#endif
 
 /**********************
  *  STATIC VARIABLES
@@ -65,7 +74,7 @@ const lv_obj_class_t lv_bar_class = {
     .height_def = LV_DPI_DEF / 10,
     .instance_size = sizeof(lv_bar_t),
     .base_class = &lv_obj_class,
-    .name = "bar",
+    .name = "lv_bar",
 };
 
 /**********************
@@ -151,6 +160,16 @@ void lv_bar_set_range(lv_obj_t * obj, int32_t min, int32_t max)
     lv_obj_invalidate(obj);
 }
 
+void lv_bar_set_min_value(lv_obj_t * obj, int32_t min)
+{
+    lv_bar_set_range(obj, min, lv_bar_get_max_value(obj));
+}
+
+void lv_bar_set_max_value(lv_obj_t * obj, int32_t max)
+{
+    lv_bar_set_range(obj, lv_bar_get_min_value(obj), max);
+}
+
 void lv_bar_set_mode(lv_obj_t * obj, lv_bar_mode_t mode)
 {
     LV_ASSERT_OBJ(obj, MY_CLASS);
@@ -161,6 +180,15 @@ void lv_bar_set_mode(lv_obj_t * obj, lv_bar_mode_t mode)
         bar->start_value = bar->min_value;
     }
 
+    lv_obj_invalidate(obj);
+}
+
+void lv_bar_set_orientation(lv_obj_t * obj, lv_bar_orientation_t orientation)
+{
+    LV_ASSERT_OBJ(obj, MY_CLASS);
+    lv_bar_t * bar = (lv_bar_t *)obj;
+
+    bar->orientation = orientation;
     lv_obj_invalidate(obj);
 }
 
@@ -209,6 +237,14 @@ lv_bar_mode_t lv_bar_get_mode(lv_obj_t * obj)
     return bar->mode;
 }
 
+lv_bar_orientation_t lv_bar_get_orientation(lv_obj_t * obj)
+{
+    LV_ASSERT_OBJ(obj, MY_CLASS);
+    lv_bar_t * bar = (lv_bar_t *)obj;
+
+    return bar->orientation;
+}
+
 bool lv_bar_is_symmetrical(lv_obj_t * obj)
 {
     LV_ASSERT_OBJ(obj, MY_CLASS);
@@ -217,6 +253,22 @@ bool lv_bar_is_symmetrical(lv_obj_t * obj)
     return  bar->mode == LV_BAR_MODE_SYMMETRICAL && bar->min_value < 0 && bar->max_value > 0 &&
             bar->start_value == bar->min_value;
 }
+
+#if LV_USE_OBSERVER
+lv_observer_t * lv_bar_bind_value(lv_obj_t * obj, lv_subject_t * subject)
+{
+    LV_ASSERT_NULL(subject);
+    LV_ASSERT_NULL(obj);
+
+    if(subject->type != LV_SUBJECT_TYPE_INT && subject->type != LV_SUBJECT_TYPE_FLOAT) {
+        LV_LOG_WARN("Incompatible subject type: %d", subject->type);
+        return NULL;
+    }
+
+    lv_observer_t * observer = lv_subject_add_observer_obj(subject, bar_value_observer_cb, obj, NULL);
+    return observer;
+}
+#endif /*LV_USE_OBSERVER*/
 
 /**********************
  *   STATIC FUNCTIONS
@@ -237,6 +289,7 @@ static void lv_bar_constructor(const lv_obj_class_t * class_p, lv_obj_t * obj)
     bar->indic_area.y1 = 0;
     bar->indic_area.y2 = 0;
     bar->mode = LV_BAR_MODE_NORMAL;
+    bar->orientation = LV_BAR_ORIENTATION_AUTO;
     bar->val_reversed = false;
 
     lv_bar_init_anim(obj, &bar->cur_value_anim);
@@ -280,7 +333,20 @@ static void draw_indic(lv_event_t * e)
         range = 1;
     }
 
-    bool hor = barw >= barh;
+    bool hor = false;
+    switch(bar->orientation) {
+        case LV_BAR_ORIENTATION_HORIZONTAL:
+            hor = true;
+            break;
+        case LV_BAR_ORIENTATION_VERTICAL:
+            hor = false;
+            break;
+        case LV_BAR_ORIENTATION_AUTO:
+        default:
+            hor = (barw >= barh);
+            break;
+    }
+
     bool sym = lv_bar_is_symmetrical(obj);
 
     /*Calculate the indicator area*/
@@ -304,7 +370,6 @@ static void draw_indic(lv_event_t * e)
         bar->indic_area.x1 = obj->coords.x1 + (barw / 2) - (LV_BAR_SIZE_MIN / 2);
         bar->indic_area.x2 = bar->indic_area.x1 + LV_BAR_SIZE_MIN;
     }
-
     int32_t indic_max_w = lv_area_get_width(&bar->indic_area);
     int32_t indic_max_h = lv_area_get_height(&bar->indic_area);
 
@@ -364,6 +429,12 @@ static void draw_indic(lv_event_t * e)
     bool hor_need_reversed = hor && base_dir == LV_BASE_DIR_RTL;
     bool reversed = bar->val_reversed ^ hor_need_reversed;
 
+    /* An area with width 0 is {x1 = 0 x2 = -1} so subtracting 1 from `anim_cur_value_x` causes...
+     *     anim_start_value_x = 0   anim_cur_value_x = 0   to be {x1 = 0 x2 = -1  } which is width 0
+     *     anim_start_value_x = 0   anim_cur_value_x = 300 to be {x1 = 0 x2 =  299} which is width 300
+     */
+    anim_cur_value_x -= 1;
+
     if(reversed) {
         /*Swap axes*/
         int32_t * tmp;
@@ -380,7 +451,7 @@ static void draw_indic(lv_event_t * e)
         *axis1 += anim_start_value_x;
     }
     else {
-        *axis1 = *axis2 - anim_cur_value_x + 1;
+        *axis1 = *axis2 - anim_cur_value_x;
         *axis2 -= anim_start_value_x;
     }
 
@@ -435,6 +506,7 @@ static void draw_indic(lv_event_t * e)
 
     lv_draw_rect_dsc_t draw_rect_dsc;
     lv_draw_rect_dsc_init(&draw_rect_dsc);
+    draw_rect_dsc.base.layer = layer;
     lv_obj_init_draw_rect_dsc(obj, LV_PART_INDICATOR, &draw_rect_dsc);
 
     int32_t bg_radius = lv_obj_get_style_radius(obj, LV_PART_MAIN);
@@ -479,7 +551,7 @@ static void draw_indic(lv_event_t * e)
     /*The indicator is fully drawn if it's larger than the bg*/
     if((bg_left < 0 || bg_right < 0 || bg_top < 0 || bg_bottom < 0)) radius_issue = false;
     else if(indic_radius >= bg_radius) radius_issue = false;
-    else if(_lv_area_is_in(&indic_area, &bar_coords, bg_radius)) radius_issue = false;
+    else if(lv_area_is_in(&indic_area, &bar_coords, bg_radius)) radius_issue = false;
 
     if(radius_issue || mask_needed) {
         if(!radius_issue) {
@@ -522,7 +594,7 @@ static void draw_indic(lv_event_t * e)
 
         lv_draw_mask_rect_dsc_t mask_dsc;
         lv_draw_mask_rect_dsc_init(&mask_dsc);
-        if(radius_issue) { bar_coords.x2 += 1; //workaround for a drawing crash in LVGL9.1 bar/slider when top-padding is nonzero and right-padding is less than 1
+        if(radius_issue) {
             mask_dsc.area = bar_coords;
             mask_dsc.radius = bg_radius;
             lv_draw_mask_rect(layer_indic, &mask_dsc);
@@ -594,14 +666,14 @@ static void lv_bar_event(const lv_obj_class_t * class_p, lv_event_t * e)
 
 static void lv_bar_anim(void * var, int32_t value)
 {
-    _lv_bar_anim_t * bar_anim = var;
+    lv_bar_anim_t * bar_anim = var;
     bar_anim->anim_state    = value;
     lv_obj_invalidate(bar_anim->bar);
 }
 
 static void lv_bar_anim_completed(lv_anim_t * a)
 {
-    _lv_bar_anim_t * var = a->var;
+    lv_bar_anim_t * var = a->var;
     lv_obj_t * obj = (lv_obj_t *)var->bar;
     lv_bar_t * bar = (lv_bar_t *)obj;
 
@@ -614,7 +686,7 @@ static void lv_bar_anim_completed(lv_anim_t * a)
 }
 
 static void lv_bar_set_value_with_anim(lv_obj_t * obj, int32_t new_value, int32_t * value_ptr,
-                                       _lv_bar_anim_t * anim_info, lv_anim_enable_t en)
+                                       lv_bar_anim_t * anim_info, lv_anim_enable_t en)
 {
     if(en == LV_ANIM_OFF) {
         lv_anim_delete(anim_info, NULL);
@@ -653,12 +725,28 @@ static void lv_bar_set_value_with_anim(lv_obj_t * obj, int32_t new_value, int32_
     }
 }
 
-static void lv_bar_init_anim(lv_obj_t * obj, _lv_bar_anim_t * bar_anim)
+static void lv_bar_init_anim(lv_obj_t * obj, lv_bar_anim_t * bar_anim)
 {
     bar_anim->bar = obj;
     bar_anim->anim_start = 0;
     bar_anim->anim_end = 0;
     bar_anim->anim_state = LV_BAR_ANIM_STATE_INV;
 }
+
+#if LV_USE_OBSERVER
+
+static void bar_value_observer_cb(lv_observer_t * observer, lv_subject_t * subject)
+{
+    if(subject->type == LV_SUBJECT_TYPE_INT) {
+        lv_bar_set_value(observer->target, subject->value.num, LV_ANIM_OFF);
+    }
+#if LV_USE_FLOAT
+    else {
+        lv_bar_set_value(observer->target, (int32_t)subject->value.float_v, LV_ANIM_OFF);
+    }
+#endif
+}
+
+#endif /*LV_USE_OBSERVER*/
 
 #endif

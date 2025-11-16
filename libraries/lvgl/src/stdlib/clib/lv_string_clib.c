@@ -1,5 +1,5 @@
 /**
- * @file lv_string.c
+ * @file lv_string_clib.c
  */
 
 /*********************
@@ -50,19 +50,35 @@ void * LV_ATTRIBUTE_FAST_MEM lv_memmove(void * dst, const void * src, size_t len
     return memmove(dst, src, len);
 }
 
+int lv_memcmp(const void * p1, const void * p2, size_t len)
+{
+    return memcmp(p1, p2, len);
+}
+
 size_t lv_strlen(const char * str)
 {
     return strlen(str);
 }
 
+size_t lv_strnlen(const char * str, size_t max_len)
+{
+    return strnlen(str, max_len);
+}
+
+size_t lv_strlcpy(char * dst, const char * src, size_t dst_size)
+{
+    size_t src_len = strlen(src);
+    if(dst_size > 0) {
+        size_t copy_size = src_len < dst_size ? src_len : dst_size - 1;
+        memcpy(dst, src, copy_size);
+        dst[copy_size] = '\0';
+    }
+    return src_len;
+}
+
 char * lv_strncpy(char * dst, const char * src, size_t dest_size)
 {
-    if(dest_size > 0) {
-        dst[0] = '\0';
-        strncat(dst, src, dest_size - 1);
-    }
-
-    return dst;
+    return strncpy(dst, src, dest_size);
 }
 
 char * lv_strcpy(char * dst, const char * src)
@@ -70,9 +86,14 @@ char * lv_strcpy(char * dst, const char * src)
     return strcpy(dst, src);
 }
 
-int32_t lv_strcmp(const char * s1, const char * s2)
+int lv_strcmp(const char * s1, const char * s2)
 {
     return strcmp(s1, s2);
+}
+
+int lv_strncmp(const char * s1, const char * s2, size_t len)
+{
+    return strncmp(s1, s2, len);
 }
 
 char * lv_strdup(const char * src)
@@ -84,6 +105,32 @@ char * lv_strdup(const char * src)
 
     lv_memcpy(dst, src, len); /*do memcpy is faster than strncpy when length is known*/
     return dst;
+}
+
+char * lv_strndup(const char * src, size_t max_len)
+{
+    size_t len = lv_strnlen(src, max_len);
+    char * dst = lv_malloc(len + 1);
+    if(dst == NULL) return NULL;
+
+    lv_memcpy(dst, src, len);
+    dst[len] = '\0';
+    return dst;
+}
+
+char * lv_strcat(char * dst, const char * src)
+{
+    return strcat(dst, src);
+}
+
+char * lv_strncat(char * dst, const char * src, size_t src_len)
+{
+    return strncat(dst, src, src_len);
+}
+
+char * lv_strchr(const char * str, int c)
+{
+    return strchr(str, c);
 }
 
 /**********************

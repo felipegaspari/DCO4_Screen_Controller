@@ -1,7 +1,9 @@
 #include "lv_draw_dave2d.h"
 #if LV_USE_DRAW_DAVE2D
 
-void lv_draw_dave2d_arc(lv_draw_dave2d_unit_t * u, const lv_draw_arc_dsc_t * dsc, const lv_area_t * coords)
+#include "../../../misc/lv_area_private.h"
+
+void lv_draw_dave2d_arc(lv_draw_task_t * t, const lv_draw_arc_dsc_t * dsc, const lv_area_t * coords)
 {
 
     uint32_t                flags = 0;
@@ -15,13 +17,14 @@ void lv_draw_dave2d_arc(lv_draw_dave2d_unit_t * u, const lv_draw_arc_dsc_t * dsc
     lv_point_t arc_centre;
     int32_t x;
     int32_t y;
+    lv_draw_dave2d_unit_t * u = (lv_draw_dave2d_unit_t *)t->draw_unit;
 
-    if(!_lv_area_intersect(&clipped_area, coords, u->base_unit.clip_area)) return;
+    if(!lv_area_intersect(&clipped_area, coords, &t->clip_area)) return;
 
-    x = 0 - u->base_unit.target_layer->buf_area.x1;
-    y = 0 - u->base_unit.target_layer->buf_area.y1;
+    x = 0 - t->target_layer->buf_area.x1;
+    y = 0 - t->target_layer->buf_area.y1;
 
-    buffer_area = u->base_unit.target_layer->buf_area;
+    buffer_area = t->target_layer->buf_area;
 
     arc_centre = dsc->center;
     arc_centre.x = arc_centre.x - buffer_area.x1;
@@ -40,19 +43,13 @@ void lv_draw_dave2d_arc(lv_draw_dave2d_unit_t * u, const lv_draw_arc_dsc_t * dsc
 #if LV_USE_OS
     lv_result_t  status;
     status = lv_mutex_lock(u->pd2Mutex);
-    if(LV_RESULT_OK != status) {
-        __BKPT(0);
-    }
-#endif
-
-#if D2_RENDER_EACH_OPERATION
-    d2_selectrenderbuffer(u->d2_handle, u->renderbuffer);
+    LV_ASSERT(LV_RESULT_OK == status);
 #endif
 
     //
     // Generate render operations
     //
-    d2_framebuffer_from_layer(u->d2_handle, u->base_unit.target_layer);
+    d2_framebuffer_from_layer(u->d2_handle, t->target_layer);
 
     d2_setalpha(u->d2_handle, dsc->opa);
 
@@ -60,9 +57,7 @@ void lv_draw_dave2d_arc(lv_draw_dave2d_unit_t * u, const lv_draw_arc_dsc_t * dsc
 
     result = d2_cliprect(u->d2_handle, (d2_border)clipped_area.x1, (d2_border)clipped_area.y1, (d2_border)clipped_area.x2,
                          (d2_border)clipped_area.y2);
-    if(D2_OK != result) {
-        __BKPT(0);
-    }
+    LV_ASSERT(D2_OK == result);
 
     if(360 <= LV_ABS(dsc->start_angle - dsc->end_angle)) {
         d2_rendercircle(u->d2_handle,
@@ -131,7 +126,7 @@ void lv_draw_dave2d_arc(lv_draw_dave2d_unit_t * u, const lv_draw_arc_dsc_t * dsc
             arc_area.y1 = arc_centre.y - dsc->radius;
         }
 
-        draw_arc = _lv_area_intersect(&clip_arc, &arc_area, &clipped_area);
+        draw_arc = lv_area_intersect(&clip_arc, &arc_area, &clipped_area);
 
         if(draw_arc) {
 
@@ -145,9 +140,7 @@ void lv_draw_dave2d_arc(lv_draw_dave2d_unit_t * u, const lv_draw_arc_dsc_t * dsc
                                     (d2_s32)(sin_end << 1),
                                     -(d2_s32)(cos_end << 1),
                                     flags);
-            if(D2_OK != result) {
-                __BKPT(0);
-            }
+            LV_ASSERT(D2_OK == result);
 
             if(dsc->rounded) {
                 lv_point_t start_coord;
@@ -174,20 +167,9 @@ void lv_draw_dave2d_arc(lv_draw_dave2d_unit_t * u, const lv_draw_arc_dsc_t * dsc
         }
     }
 
-    //
-    // Execute render operations
-    //
-
-#if D2_RENDER_EACH_OPERATION
-    d2_executerenderbuffer(u->d2_handle, u->renderbuffer, 0);
-    d2_flushframe(u->d2_handle);
-#endif
-
 #if LV_USE_OS
     status = lv_mutex_unlock(u->pd2Mutex);
-    if(LV_RESULT_OK != status) {
-        __BKPT(0);
-    }
+    LV_ASSERT(LV_RESULT_OK == status);
 #endif
 }
 

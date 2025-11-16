@@ -15,8 +15,6 @@ extern "C" {
  *********************/
 #include "../lv_conf_internal.h"
 
-#include <stddef.h>
-#include <stdbool.h>
 #include "../misc/lv_types.h"
 #include "../misc/lv_style.h"
 #include "../misc/lv_area.h"
@@ -40,50 +38,6 @@ extern "C" {
 /**********************
  *      TYPEDEFS
  **********************/
-
-/**
- * Possible states of a widget.
- * OR-ed values are possible
- */
-enum _lv_state_t {
-    LV_STATE_DEFAULT     =  0x0000,
-    LV_STATE_CHECKED     =  0x0001,
-    LV_STATE_FOCUSED     =  0x0002,
-    LV_STATE_FOCUS_KEY   =  0x0004,
-    LV_STATE_EDITED      =  0x0008,
-    LV_STATE_HOVERED     =  0x0010,
-    LV_STATE_PRESSED     =  0x0020,
-    LV_STATE_SCROLLED    =  0x0040,
-    LV_STATE_DISABLED    =  0x0080,
-    LV_STATE_USER_1      =  0x1000,
-    LV_STATE_USER_2      =  0x2000,
-    LV_STATE_USER_3      =  0x4000,
-    LV_STATE_USER_4      =  0x8000,
-
-    LV_STATE_ANY = 0xFFFF,    /**< Special value can be used in some functions to target all states*/
-};
-
-/**
- * The possible parts of widgets.
- * The parts can be considered as the internal building block of the widgets.
- * E.g. slider = background + indicator + knob
- * Not all parts are used by every widget
- */
-
-enum _lv_part_t {
-    LV_PART_MAIN         = 0x000000,   /**< A background like rectangle*/
-    LV_PART_SCROLLBAR    = 0x010000,   /**< The scrollbar(s)*/
-    LV_PART_INDICATOR    = 0x020000,   /**< Indicator, e.g. for slider, bar, switch, or the tick box of the checkbox*/
-    LV_PART_KNOB         = 0x030000,   /**< Like handle to grab to adjust the value*/
-    LV_PART_SELECTED     = 0x040000,   /**< Indicate the currently selected option or section*/
-    LV_PART_ITEMS        = 0x050000,   /**< Used if the widget has multiple similar elements (e.g. table cells)*/
-    LV_PART_CURSOR       = 0x060000,   /**< Mark a specific place e.g. for text area's cursor or on a chart*/
-
-    LV_PART_CUSTOM_FIRST = 0x080000,    /**< Extension point for custom widgets*/
-
-    LV_PART_ANY          = 0x0F0000,    /**< Special value can be used in some functions to target all parts*/
-};
-
 /**
  * On/Off features controlling the object's behavior.
  * OR-ed values are possible
@@ -110,16 +64,18 @@ typedef enum {
     LV_OBJ_FLAG_EVENT_BUBBLE    = (1L << 14), /**< Propagate the events to the parent too*/
     LV_OBJ_FLAG_GESTURE_BUBBLE  = (1L << 15), /**< Propagate the gestures to the parent*/
     LV_OBJ_FLAG_ADV_HITTEST     = (1L << 16), /**< Allow performing more accurate hit (click) test. E.g. consider rounded corners.*/
-    LV_OBJ_FLAG_IGNORE_LAYOUT   = (1L << 17), /**< Make the object position-able by the layouts*/
+    LV_OBJ_FLAG_IGNORE_LAYOUT   = (1L << 17), /**< Make the object not positioned by the layouts*/
     LV_OBJ_FLAG_FLOATING        = (1L << 18), /**< Do not scroll the object when the parent scrolls and ignore layout*/
     LV_OBJ_FLAG_SEND_DRAW_TASK_EVENTS = (1L << 19), /**< Send `LV_EVENT_DRAW_TASK_ADDED` events*/
     LV_OBJ_FLAG_OVERFLOW_VISIBLE = (1L << 20),/**< Do not clip the children to the parent's ext draw size*/
-#if LV_USE_FLEX
-    LV_OBJ_FLAG_FLEX_IN_NEW_TRACK = (1L << 21),     /**< Start a new flex track on this item*/
-#endif
+    LV_OBJ_FLAG_EVENT_TRICKLE   = (1L << 21), /**< Propagate the events to the children too*/
+    LV_OBJ_FLAG_STATE_TRICKLE   = (1L << 22), /**< Propagate the states to the children too*/
 
     LV_OBJ_FLAG_LAYOUT_1        = (1L << 23), /**< Custom flag, free to use by layouts*/
     LV_OBJ_FLAG_LAYOUT_2        = (1L << 24), /**< Custom flag, free to use by layouts*/
+#if LV_USE_FLEX
+    LV_OBJ_FLAG_FLEX_IN_NEW_TRACK = LV_OBJ_FLAG_LAYOUT_1,     /**< Start a new flex track on this item*/
+#endif
 
     LV_OBJ_FLAG_WIDGET_1        = (1L << 25), /**< Custom flag, free to use by widget*/
     LV_OBJ_FLAG_WIDGET_2        = (1L << 26), /**< Custom flag, free to use by widget*/
@@ -127,10 +83,10 @@ typedef enum {
     LV_OBJ_FLAG_USER_2          = (1L << 28), /**< Custom flag, free to use by user*/
     LV_OBJ_FLAG_USER_3          = (1L << 29), /**< Custom flag, free to use by user*/
     LV_OBJ_FLAG_USER_4          = (1L << 30), /**< Custom flag, free to use by user*/
-} _lv_obj_flag_t;
+} lv_obj_flag_t;
 
 #if LV_USE_OBJ_PROPERTY
-enum {
+enum _lv_signed_prop_id_t {
     /*OBJ flag properties */
     LV_PROPERTY_ID(OBJ, FLAG_START,                 LV_PROPERTY_TYPE_INT,       0),
     LV_PROPERTY_ID(OBJ, FLAG_HIDDEN,                LV_PROPERTY_TYPE_INT,       0),
@@ -154,9 +110,11 @@ enum {
     LV_PROPERTY_ID(OBJ, FLAG_FLOATING,              LV_PROPERTY_TYPE_INT,       18),
     LV_PROPERTY_ID(OBJ, FLAG_SEND_DRAW_TASK_EVENTS, LV_PROPERTY_TYPE_INT,       19),
     LV_PROPERTY_ID(OBJ, FLAG_OVERFLOW_VISIBLE,      LV_PROPERTY_TYPE_INT,       20),
-    LV_PROPERTY_ID(OBJ, FLAG_FLEX_IN_NEW_TRACK,     LV_PROPERTY_TYPE_INT,       21),
+    LV_PROPERTY_ID(OBJ, FLAG_EVENT_TRICKLE,         LV_PROPERTY_TYPE_INT,       21),
+    LV_PROPERTY_ID(OBJ, FLAG_STATE_TRICKLE,         LV_PROPERTY_TYPE_INT,       22),
     LV_PROPERTY_ID(OBJ, FLAG_LAYOUT_1,              LV_PROPERTY_TYPE_INT,       23),
     LV_PROPERTY_ID(OBJ, FLAG_LAYOUT_2,              LV_PROPERTY_TYPE_INT,       24),
+    LV_PROPERTY_ID(OBJ, FLAG_FLEX_IN_NEW_TRACK,     LV_PROPERTY_TYPE_INT,       23), /*Mapped to FLAG_LAYOUT_1*/
     LV_PROPERTY_ID(OBJ, FLAG_WIDGET_1,              LV_PROPERTY_TYPE_INT,       25),
     LV_PROPERTY_ID(OBJ, FLAG_WIDGET_2,              LV_PROPERTY_TYPE_INT,       26),
     LV_PROPERTY_ID(OBJ, FLAG_USER_1,                LV_PROPERTY_TYPE_INT,       27),
@@ -183,7 +141,32 @@ enum {
     LV_PROPERTY_ID(OBJ, STATE_END,                  LV_PROPERTY_TYPE_INT,       47),
 
     /*OBJ normal properties*/
-    LV_PROPERTY_ID(OBJ, PARENT,                     LV_PROPERTY_TYPE_POINTER,   31),
+    LV_PROPERTY_ID(OBJ, PARENT,                     LV_PROPERTY_TYPE_OBJ,       48),
+    LV_PROPERTY_ID(OBJ, X,                          LV_PROPERTY_TYPE_INT,       49),
+    LV_PROPERTY_ID(OBJ, Y,                          LV_PROPERTY_TYPE_INT,       50),
+    LV_PROPERTY_ID(OBJ, W,                          LV_PROPERTY_TYPE_INT,       51),
+    LV_PROPERTY_ID(OBJ, H,                          LV_PROPERTY_TYPE_INT,       52),
+    LV_PROPERTY_ID(OBJ, CONTENT_WIDTH,              LV_PROPERTY_TYPE_INT,       53),
+    LV_PROPERTY_ID(OBJ, CONTENT_HEIGHT,             LV_PROPERTY_TYPE_INT,       54),
+    LV_PROPERTY_ID(OBJ, LAYOUT,                     LV_PROPERTY_TYPE_INT,       55),
+    LV_PROPERTY_ID(OBJ, ALIGN,                      LV_PROPERTY_TYPE_INT,       56),
+    LV_PROPERTY_ID(OBJ, SCROLLBAR_MODE,             LV_PROPERTY_TYPE_INT,       57),
+    LV_PROPERTY_ID(OBJ, SCROLL_DIR,                 LV_PROPERTY_TYPE_INT,       58),
+    LV_PROPERTY_ID(OBJ, SCROLL_SNAP_X,              LV_PROPERTY_TYPE_INT,       59),
+    LV_PROPERTY_ID(OBJ, SCROLL_SNAP_Y,              LV_PROPERTY_TYPE_INT,       60),
+    LV_PROPERTY_ID(OBJ, SCROLL_X,                   LV_PROPERTY_TYPE_INT,       61),
+    LV_PROPERTY_ID(OBJ, SCROLL_Y,                   LV_PROPERTY_TYPE_INT,       62),
+    LV_PROPERTY_ID(OBJ, SCROLL_TOP,                 LV_PROPERTY_TYPE_INT,       63),
+    LV_PROPERTY_ID(OBJ, SCROLL_BOTTOM,              LV_PROPERTY_TYPE_INT,       64),
+    LV_PROPERTY_ID(OBJ, SCROLL_LEFT,                LV_PROPERTY_TYPE_INT,       65),
+    LV_PROPERTY_ID(OBJ, SCROLL_RIGHT,               LV_PROPERTY_TYPE_INT,       66),
+    LV_PROPERTY_ID(OBJ, SCROLL_END,                 LV_PROPERTY_TYPE_INT,       67),
+    LV_PROPERTY_ID(OBJ, EXT_DRAW_SIZE,              LV_PROPERTY_TYPE_INT,       68),
+    LV_PROPERTY_ID(OBJ, EVENT_COUNT,                LV_PROPERTY_TYPE_INT,       69),
+    LV_PROPERTY_ID(OBJ, SCREEN,                     LV_PROPERTY_TYPE_OBJ,       70),
+    LV_PROPERTY_ID(OBJ, DISPLAY,                    LV_PROPERTY_TYPE_POINTER,   71),
+    LV_PROPERTY_ID(OBJ, CHILD_COUNT,                LV_PROPERTY_TYPE_INT,       72),
+    LV_PROPERTY_ID(OBJ, INDEX,                      LV_PROPERTY_TYPE_INT,       73),
 
     LV_PROPERTY_OBJ_END,
 };
@@ -193,54 +176,6 @@ enum {
  * Make the base object's class publicly available.
  */
 LV_ATTRIBUTE_EXTERN_DATA extern const lv_obj_class_t lv_obj_class;
-
-/**
- * Special, rarely used attributes.
- * They are allocated automatically if any elements is set.
- */
-typedef struct {
-    lv_obj_t ** children;   /**< Store the pointer of the children in an array.*/
-    lv_group_t * group_p;
-    lv_event_list_t event_list;
-
-    lv_point_t scroll;              /**< The current X/Y scroll offset*/
-
-    int32_t ext_click_pad;          /**< Extra click padding in all direction*/
-    int32_t ext_draw_size;          /**< EXTend the size in every direction for drawing.*/
-
-    uint16_t child_cnt;             /**< Number of children*/
-    uint16_t scrollbar_mode : 2;    /**< How to display scrollbars, see `lv_scrollbar_mode_t`*/
-    uint16_t scroll_snap_x : 2;     /**< Where to align the snappable children horizontally, see `lv_scroll_snap_t`*/
-    uint16_t scroll_snap_y : 2;     /**< Where to align the snappable children vertically*/
-    uint16_t scroll_dir : 4;        /**< The allowed scroll direction(s), see `lv_dir_t`*/
-    uint16_t layer_type : 2;        /**< Cache the layer type here. Element of @lv_intermediate_layer_type_t */
-} _lv_obj_spec_attr_t;
-
-struct _lv_obj_t {
-    const lv_obj_class_t * class_p;
-    lv_obj_t * parent;
-    _lv_obj_spec_attr_t * spec_attr;
-    _lv_obj_style_t * styles;
-#if LV_OBJ_STYLE_CACHE
-    uint32_t style_main_prop_is_set;
-    uint32_t style_other_prop_is_set;
-#endif
-    void * user_data;
-#if LV_USE_OBJ_ID
-    void * id;
-#endif
-    lv_area_t coords;
-    lv_obj_flag_t flags;
-    lv_state_t state;
-    uint16_t layout_inv : 1;
-    uint16_t readjust_scroll_after_layout : 1;
-    uint16_t scr_layout_inv : 1;
-    uint16_t skip_trans : 1;
-    uint16_t style_cnt  : 6;
-    uint16_t h_layout   : 1;
-    uint16_t w_layout   : 1;
-    uint16_t is_deleting : 1;
-};
 
 /**********************
  * GLOBAL PROTOTYPES
@@ -260,14 +195,14 @@ lv_obj_t * lv_obj_create(lv_obj_t * parent);
 /**
  * Set one or more flags
  * @param obj   pointer to an object
- * @param f     R-ed values from `lv_obj_flag_t` to set.
+ * @param f     OR-ed values from `lv_obj_flag_t` to set.
  */
 void lv_obj_add_flag(lv_obj_t * obj, lv_obj_flag_t f);
 
 /**
  * Remove one or more flags
  * @param obj   pointer to an object
- * @param f     OR-ed values from `lv_obj_flag_t` to set.
+ * @param f     OR-ed values from `lv_obj_flag_t` to clear.
  */
 void lv_obj_remove_flag(lv_obj_t * obj, lv_obj_flag_t f);
 
@@ -277,7 +212,7 @@ void lv_obj_remove_flag(lv_obj_t * obj, lv_obj_flag_t f);
  * @param f     OR-ed values from `lv_obj_flag_t` to update.
  * @param v     true: add the flags; false: remove the flags
  */
-void lv_obj_update_flag(lv_obj_t * obj, lv_obj_flag_t f, bool v);
+void lv_obj_set_flag(lv_obj_t * obj, lv_obj_flag_t f, bool v);
 
 /**
  * Add one or more states to the object. The other state bits will remain unchanged.
@@ -308,10 +243,7 @@ void lv_obj_set_state(lv_obj_t * obj, lv_state_t state, bool v);
  * @param obj   pointer to an object
  * @param user_data   pointer to the new user_data.
  */
-static inline void lv_obj_set_user_data(lv_obj_t * obj, void * user_data)
-{
-    obj->user_data = user_data;
-}
+void lv_obj_set_user_data(lv_obj_t * obj, void * user_data);
 
 /*=======================
  * Getter functions
@@ -329,7 +261,7 @@ bool lv_obj_has_flag(const lv_obj_t * obj, lv_obj_flag_t f);
  * Check if a given flag or any of the flags are set on an object.
  * @param obj   pointer to an object
  * @param f     the flag(s) to check (OR-ed values can be used)
- * @return      true: at lest one flag flag is set; false: none of the flags are set
+ * @return      true: at least one flag is set; false: none of the flags are set
  */
 bool lv_obj_has_flag_any(const lv_obj_t * obj, lv_obj_flag_t f);
 
@@ -360,10 +292,7 @@ lv_group_t * lv_obj_get_group(const lv_obj_t * obj);
  * @param obj   pointer to an object
  * @return      the pointer to the user_data of the object
  */
-static inline void * lv_obj_get_user_data(lv_obj_t * obj)
-{
-    return obj->user_data;
-}
+void * lv_obj_get_user_data(lv_obj_t * obj);
 
 /*=======================
  * Other functions
@@ -406,12 +335,87 @@ const lv_obj_class_t * lv_obj_get_class(const lv_obj_t * obj);
  */
 bool lv_obj_is_valid(const lv_obj_t * obj);
 
-#if LV_USE_OBJ_ID
+/**
+ * Utility to set an object reference to NULL when it gets deleted.
+ * The reference should be in a location that will not become invalid
+ * during the object's lifetime, i.e. static or allocated.
+ * @param obj_ptr   a pointer to a pointer to an object
+ */
+void lv_obj_null_on_delete(lv_obj_t ** obj_ptr);
 
 /**
- * Assign an id to an object if not previously assigned
- * Set `LV_USE_OBJ_ID_BUILTIN` to 1 to use builtin method to generate object ID.
- * Otherwise, these functions including `lv_obj_[assign|free|stringify]_id` should be implemented externally.
+ * Add an event handler to a widget that will load a screen on a trigger.
+ * @param obj           pointer to widget which should load the screen
+ * @param trigger       an event code, e.g. `LV_EVENT_CLICKED`
+ * @param screen        the screen to load (must be a valid widget)
+ * @param anim_type     element of `lv_screen_load_anim_t` the screen load animation
+ * @param duration      duration of the animation in milliseconds
+ * @param delay         delay before the screen load in milliseconds
+ */
+void lv_obj_add_screen_load_event(lv_obj_t * obj, lv_event_code_t trigger, lv_obj_t * screen,
+                                  lv_screen_load_anim_t anim_type, uint32_t duration, uint32_t delay);
+
+/**
+ * Add an event handler to a widget that will create a screen on a trigger.
+ * The created screen will be deleted when it's unloaded
+ * @param obj               pointer to widget which should load the screen
+ * @param trigger           an event code, e.g. `LV_EVENT_CLICKED`
+ * @param screen_create_cb  a callback to create the screen, e.g. `lv_obj_t * myscreen_create(void)`
+ * @param anim_type         element of `lv_screen_load_anim_t` the screen load animation
+ * @param duration          duration of the animation in milliseconds
+ * @param delay             delay before the screen load in milliseconds
+ */
+void lv_obj_add_screen_create_event(lv_obj_t * obj, lv_event_code_t trigger, lv_screen_create_cb_t screen_create_cb,
+                                    lv_screen_load_anim_t anim_type, uint32_t duration, uint32_t delay);
+
+
+/**
+ * Play a timeline animation on a trigger
+ * @param obj               pointer to widget which should trigger playing the animation
+ * @param trigger           an event code, e.g. `LV_EVENT_CLICKED`
+ * @param at                pointer to an animation timeline
+ * @param delay             wait time before starting the animation
+ * @param reverse           true: play in reverse
+ */
+void lv_obj_add_play_timeline_event(lv_obj_t * obj, lv_event_code_t trigger, lv_anim_timeline_t * at, uint32_t delay,
+                                    bool reverse);
+
+#if LV_USE_OBJ_ID
+/**
+ * Set an id for an object.
+ * @param obj   pointer to an object
+ * @param id    the id of the object
+ */
+void lv_obj_set_id(lv_obj_t * obj, void * id);
+
+/**
+ * Get the id of an object.
+ * @param obj   pointer to an object
+ * @return      the id of the object
+ */
+void * lv_obj_get_id(const lv_obj_t * obj);
+
+/**
+ * DEPRECATED IDs are used only to print the widget trees.
+ * To find a widget use `lv_obj_find_by_name`
+ *
+ * Get the child object by its id.
+ * It will check children and grandchildren recursively.
+ * Function `lv_obj_id_compare` is used to matched obj id with given id.
+ *
+ * @param obj       pointer to an object
+ * @param id        the id of the child object
+ * @return          pointer to the child object or NULL if not found
+ */
+lv_obj_t * lv_obj_find_by_id(const lv_obj_t * obj, const void * id);
+
+/**
+ * Assign id to object if not previously assigned.
+ * This function gets called automatically when LV_OBJ_ID_AUTO_ASSIGN is enabled.
+ *
+ * Set `LV_USE_OBJ_ID_BUILTIN` to use the builtin method to generate object ID.
+ * Otherwise, these functions including `lv_obj_[set|assign|free|stringify]_id` and
+ * `lv_obj_id_compare`should be implemented externally.
  *
  * @param class_p   the class this obj belongs to. Note obj->class_p is the class currently being constructed.
  * @param obj   pointer to an object
@@ -419,10 +423,23 @@ bool lv_obj_is_valid(const lv_obj_t * obj);
 void lv_obj_assign_id(const lv_obj_class_t * class_p, lv_obj_t * obj);
 
 /**
- * Free resources allocated by `lv_obj_assign_id`
+ * Free resources allocated by `lv_obj_assign_id` or `lv_obj_set_id`.
+ * This function is also called automatically when object is deleted.
  * @param obj   pointer to an object
  */
 void lv_obj_free_id(lv_obj_t * obj);
+
+/**
+ * Compare two obj id, return 0 if they are equal.
+ *
+ * Set `LV_USE_OBJ_ID_BUILTIN` to use the builtin method for compare.
+ * Otherwise, it must be implemented externally.
+ *
+ * @param id1: the first id
+ * @param id2: the second id
+ * @return     0 if they are equal, non-zero otherwise.
+ */
+int lv_obj_id_compare(const void * id1, const void * id2);
 
 /**
  * Format an object's id into a string.
@@ -437,7 +454,6 @@ const char * lv_obj_stringify_id(lv_obj_t * obj, char * buf, uint32_t len);
  * Free resources used by builtin ID generator.
  */
 void lv_objid_builtin_destroy(void);
-
 #endif
 
 #endif /*LV_USE_OBJ_ID*/
@@ -454,7 +470,7 @@ void lv_objid_builtin_destroy(void);
         LV_ASSERT_MSG(lv_obj_is_valid(obj_p)  == true, "The object is invalid, deleted or corrupted?"); \
     } while(0)
 # else
-#  define LV_ASSERT_OBJ(obj_p, obj_class) do{}while(0)
+#  define LV_ASSERT_OBJ(obj_p, obj_class) LV_ASSERT_NULL(obj_p)
 #endif
 
 #if LV_USE_LOG && LV_LOG_TRACE_OBJ_CREATE

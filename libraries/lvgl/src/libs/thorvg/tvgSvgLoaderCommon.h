@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020 - 2023 the ThorVG project. All rights reserved.
+ * Copyright (c) 2020 - 2024 the ThorVG project. All rights reserved.
 
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -218,6 +218,7 @@ enum class SvgParserLengthType
 {
     Vertical,
     Horizontal,
+    Diagonal,
     //In case of, for example, radius of radial gradient
     Other
 };
@@ -377,6 +378,14 @@ struct SvgCssStyleNode
 {
 };
 
+struct SvgTextNode
+{
+    char* text;
+    char* fontFamily;
+    float x, y;
+    float fontSize;
+};
+
 struct SvgLinearGradient
 {
     float x1;
@@ -450,11 +459,11 @@ struct SvgStyleGradient
     void clear()
     {
         stops.reset();
-        free(transform);
-        free(radial);
-        free(linear);
-        free(ref);
-        free(id);
+        lv_free(transform);
+        lv_free(radial);
+        lv_free(linear);
+        lv_free(ref);
+        lv_free(id);
     }
 };
 
@@ -488,11 +497,12 @@ struct SvgStyleProperty
     SvgComposite mask;
     int opacity;
     SvgColor color;
-    bool curColorSet;
     char* cssClass;
-    bool paintOrder; //true if default (fill, stroke), false otherwise
     SvgStyleFlags flags;
     SvgStyleFlags flagsImportance; //indicates the importance of the flag - if set, higher priority is applied (https://drafts.csswg.org/css-cascade-4/#importance)
+    bool curColorSet;
+    bool paintOrder; //true if default (fill, stroke), false otherwise
+    bool display;
 };
 
 struct SvgNode
@@ -520,8 +530,8 @@ struct SvgNode
         SvgClipNode clip;
         SvgCssStyleNode cssStyle;
         SvgSymbolNode symbol;
+        SvgTextNode text;
     } node;
-    bool display;
     ~SvgNode();
 };
 
@@ -548,11 +558,18 @@ struct SvgNodeIdPair
     char *id;
 };
 
+enum class OpenedTagType : uint8_t
+{
+    Other = 0,
+    Style,
+    Text
+};
+
 struct SvgLoaderData
 {
     Array<SvgNode*> stack;
     SvgNode* doc = nullptr;
-    SvgNode* def = nullptr;
+    SvgNode* def = nullptr; //also used to store nested graphic nodes
     SvgNode* cssStyle = nullptr;
     Array<SvgStyleGradient*> gradients;
     SvgStyleGradient* latestGradient = nullptr; //For stops
@@ -562,7 +579,8 @@ struct SvgLoaderData
     Array<char*> images;        //embedded images
     int level = 0;
     bool result = false;
-    bool style = false;
+    OpenedTagType openedTag = OpenedTagType::Other;
+    SvgNode* currentGraphicsNode = nullptr;
 };
 
 struct Box

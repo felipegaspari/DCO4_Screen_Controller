@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020 - 2023 the ThorVG project. All rights reserved.
+ * Copyright (c) 2020 - 2024 the ThorVG project. All rights reserved.
 
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -24,6 +24,7 @@
 #if LV_USE_THORVG_INTERNAL
 
 #include "config.h"
+#include <cmath>
 #include <cstring>
 #include <memory.h>
 #include "tvgMath.h"
@@ -185,7 +186,7 @@ float strToFloat(const char *nPtr, char **endPtr)
         auto scale = 1.0f;
 
         while (exponentPart >= 8U) {
-            scale *= (float)1E8;
+            scale *= 1E8;
             exponentPart -= 8U;
         }
         while (exponentPart > 0U) {
@@ -200,6 +201,8 @@ float strToFloat(const char *nPtr, char **endPtr)
 
 success:
     if (endPtr) *endPtr = (char *)(a);
+    if (!std::isfinite(val)) return 0.0f;
+
     return minus * val;
 
 error:
@@ -207,26 +210,26 @@ error:
     return 0.0f;
 }
 
-
-int str2int(const char* str, size_t n)
-{
-    int ret = 0;
-    for(size_t i = 0; i < n; ++i) {
-        ret = ret * 10 + (str[i] - '0');
-    }
-    return ret;
-}
-
 char* strDuplicate(const char *str, size_t n)
 {
     auto len = strlen(str);
     if (len < n) n = len;
 
-    auto ret = (char *) malloc(n + 1);
+    auto ret = (char *) lv_malloc(n + 1);
+    LV_ASSERT_MALLOC(ret);
     if (!ret) return nullptr;
     ret[n] = '\0';
 
     return (char *) memcpy(ret, str, n);
+}
+
+char* strAppend(char* lhs, const char* rhs, size_t n)
+{
+    if (!rhs) return lhs;
+    if (!lhs) return strDuplicate(rhs, n);
+    lhs = (char*)lv_realloc(lhs, strlen(lhs) + n + 1);
+    LV_ASSERT_MALLOC(lhs);
+    return strncat(lhs, rhs, n);
 }
 
 char* strDirname(const char* path)

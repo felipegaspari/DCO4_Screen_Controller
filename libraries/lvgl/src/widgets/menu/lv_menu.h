@@ -18,7 +18,7 @@ extern "C" {
 #if LV_USE_MENU
 
 #if LV_USE_FLEX == 0
-#error "LV_USE_FLEX needs to be enabled"
+#error "lv_menu: lv_flex is required. Enable it in lv_conf.h (LV_USE_FLEX 1)"
 #endif
 
 /*********************
@@ -28,73 +28,16 @@ extern "C" {
 /**********************
  *      TYPEDEFS
  **********************/
-enum _lv_menu_mode_header_t {
-    LV_MENU_HEADER_TOP_FIXED, /* Header is positioned at the top */
-    LV_MENU_HEADER_TOP_UNFIXED, /* Header is positioned at the top and can be scrolled out of view*/
-    LV_MENU_HEADER_BOTTOM_FIXED /* Header is positioned at the bottom */
-};
+typedef enum {
+    LV_MENU_HEADER_TOP_FIXED,   /**< Header is positioned at the top */
+    LV_MENU_HEADER_TOP_UNFIXED, /**< Header is positioned at the top and can be scrolled out of view*/
+    LV_MENU_HEADER_BOTTOM_FIXED /**< Header is positioned at the bottom */
+} lv_menu_mode_header_t;
 
-#ifdef DOXYGEN
-typedef _lv_menu_mode_header_t lv_menu_mode_header_t;
-#else
-typedef uint8_t lv_menu_mode_header_t;
-#endif /*DOXYGEN*/
-
-enum _lv_menu_mode_root_back_button_t {
+typedef enum {
     LV_MENU_ROOT_BACK_BUTTON_DISABLED,
     LV_MENU_ROOT_BACK_BUTTON_ENABLED
-};
-
-#ifdef DOXYGEN
-typedef _lv_menu_mode_root_back_button_t lv_menu_mode_root_back_button_t;
-#else
-typedef uint8_t lv_menu_mode_root_back_button_t;
-#endif /*DOXYGEN*/
-
-typedef struct /// @cond
-/**
- *  Tells Doxygen to ignore a duplicate declaration
- */
-    lv_menu_load_page_event_data_t
-/// @endcond
-{
-    lv_obj_t * menu;
-    lv_obj_t * page;
-} lv_menu_load_page_event_data_t ;
-
-typedef struct {
-    lv_obj_t * page;
-} lv_menu_history_t;
-
-typedef struct {
-    lv_obj_t obj;
-    lv_obj_t * storage; /* a pointer to obj that is the parent of all pages not displayed */
-    lv_obj_t * main;
-    lv_obj_t * main_page;
-    lv_obj_t * main_header;
-    lv_obj_t *
-    main_header_back_btn; /* a pointer to obj that on click triggers back btn event handler, can be same as 'main_header' */
-    lv_obj_t * main_header_title;
-    lv_obj_t * sidebar;
-    lv_obj_t * sidebar_page;
-    lv_obj_t * sidebar_header;
-    lv_obj_t *
-    sidebar_header_back_btn; /* a pointer to obj that on click triggers back btn event handler, can be same as 'sidebar_header' */
-    lv_obj_t * sidebar_header_title;
-    lv_obj_t * selected_tab;
-    lv_ll_t history_ll;
-    uint8_t cur_depth;
-    uint8_t prev_depth;
-    uint8_t sidebar_generated : 1;
-    lv_menu_mode_header_t mode_header : 2;
-    lv_menu_mode_root_back_button_t mode_root_back_btn : 1;
-} lv_menu_t;
-
-typedef struct {
-    lv_obj_t obj;
-    char  *  title;
-    bool     static_title;
-} lv_menu_page_t;
+} lv_menu_mode_root_back_button_t;
 
 LV_ATTRIBUTE_EXTERN_DATA extern const lv_obj_class_t lv_menu_class;
 LV_ATTRIBUTE_EXTERN_DATA extern const lv_obj_class_t lv_menu_page_class;
@@ -117,30 +60,34 @@ LV_ATTRIBUTE_EXTERN_DATA extern const lv_obj_class_t lv_menu_main_header_cont_cl
 lv_obj_t * lv_menu_create(lv_obj_t * parent);
 
 /**
- * Create a menu page object
- * @param parent    pointer to menu object
+ * Create a menu page object.
+ *
+ * This call inserts the new page under menu->storage as its parent, which is itself a
+ * child of the menu, so the resulting object hierarchy is: menu => storage => new_page
+ * where `storage` is a Base Widget.
+ * @param menu      pointer to menu object.
  * @param title     pointer to text for title in header (NULL to not display title)
  * @return          pointer to the created menu page
  */
-lv_obj_t * lv_menu_page_create(lv_obj_t * parent, char const * const title);
+lv_obj_t * lv_menu_page_create(lv_obj_t * menu, char const * const title);
 
 /**
  * Create a menu cont object
- * @param parent    pointer to an object, it will be the parent of the new menu cont object
+ * @param parent    pointer to a menu page or menu section object, it will be the parent of the new menu cont object
  * @return          pointer to the created menu cont
  */
 lv_obj_t * lv_menu_cont_create(lv_obj_t * parent);
 
 /**
  * Create a menu section object
- * @param parent    pointer to an object, it will be the parent of the new menu section object
+ * @param parent    pointer to a menu page object, it will be the parent of the new menu section object
  * @return          pointer to the created menu section
  */
 lv_obj_t * lv_menu_section_create(lv_obj_t * parent);
 
 /**
  * Create a menu separator object
- * @param parent    pointer to an object, it will be the parent of the new menu separator object
+ * @param parent    pointer to a menu page object, it will be the parent of the new menu separator object
  * @return          pointer to the created menu separator
  */
 lv_obj_t * lv_menu_separator_create(lv_obj_t * parent);

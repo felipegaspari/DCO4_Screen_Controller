@@ -6,11 +6,12 @@
 /*********************
  *      INCLUDES
  *********************/
-#include "lv_ime_pinyin.h"
+#include "lv_ime_pinyin_private.h"
+#include "../../core/lv_obj_class_private.h"
 #if LV_USE_IME_PINYIN != 0
 
-#include <stdio.h>
 #include "../../lvgl.h"
+#include "../../core/lv_global.h"
 
 /*********************
  *      DEFINES
@@ -57,7 +58,7 @@ const lv_obj_class_t lv_ime_pinyin_class = {
     .group_def      = LV_OBJ_CLASS_GROUP_DEF_TRUE,
     .instance_size  = sizeof(lv_ime_pinyin_t),
     .base_class     = &lv_obj_class,
-    .name = "ime-pinyin",
+    .name = "lv_ime_pinyin",
 };
 
 #if LV_IME_PINYIN_USE_K9_MODE
@@ -583,7 +584,7 @@ static void lv_ime_pinyin_constructor(const lv_obj_class_t * class_p, lv_obj_t *
 
     pinyin_k9_init_data(obj);
 
-    _lv_ll_init(&(pinyin_ime->k9_legal_py_ll), sizeof(ime_pinyin_k9_py_str_t));
+    lv_ll_init(&(pinyin_ime->k9_legal_py_ll), sizeof(ime_pinyin_k9_py_str_t));
 #endif
 }
 
@@ -627,7 +628,7 @@ static void lv_ime_pinyin_kb_event(lv_event_t * e)
             uint16_t tmp_button_str_len = lv_strlen(pinyin_ime->input_char);
             if((btn_id >= 16) && (tmp_button_str_len > 0) && (btn_id < (16 + LV_IME_PINYIN_K9_CAND_TEXT_NUM))) {
                 lv_memzero(pinyin_ime->input_char, sizeof(pinyin_ime->input_char));
-                strcat(pinyin_ime->input_char, txt);
+                lv_strcat(pinyin_ime->input_char, txt);
                 pinyin_input_proc(obj);
 
                 for(int index = 0; index < (pinyin_ime->ta_count + tmp_button_str_len); index++) {
@@ -706,7 +707,8 @@ static void lv_ime_pinyin_kb_event(lv_event_t * e)
         }
         else if((pinyin_ime->mode == LV_IME_PINYIN_MODE_K26) && ((txt[0] >= 'a' && txt[0] <= 'z') || (txt[0] >= 'A' &&
                                                                                                       txt[0] <= 'Z'))) {
-            strcat(pinyin_ime->input_char, txt);
+            uint16_t len = lv_strlen(pinyin_ime->input_char);
+            lv_snprintf(pinyin_ime->input_char + len, sizeof(pinyin_ime->input_char) - len, "%s", txt);
             pinyin_input_proc(obj);
             pinyin_ime->ta_count++;
         }
@@ -796,6 +798,7 @@ static void pinyin_input_proc(lv_obj_t * obj)
     }
 
     lv_obj_remove_flag(pinyin_ime->cand_panel, LV_OBJ_FLAG_HIDDEN);
+    lv_obj_invalidate(pinyin_ime->cand_panel);
 }
 
 static void pinyin_page_proc(lv_obj_t * obj, uint16_t dir)
@@ -830,7 +833,7 @@ static void pinyin_page_proc(lv_obj_t * obj, uint16_t dir)
     uint16_t offset = pinyin_ime->py_page * (3 * LV_IME_PINYIN_CAND_TEXT_NUM);
     for(uint8_t i = 0; (i < pinyin_ime->cand_num && i < LV_IME_PINYIN_CAND_TEXT_NUM); i++) {
         if((remainder > 0) && (pinyin_ime->py_page == page_num)) {
-            if(i > remainder)
+            if(i >= remainder)
                 break;
         }
         for(uint8_t j = 0; j < 3; j++) {
@@ -876,8 +879,8 @@ static void init_pinyin_dict(lv_obj_t * obj, const lv_pinyin_dict_t * dict)
         }
         else {
             headletter = dict[i].py[0];
+            pinyin_ime->py_num[letter_calc] = offset_count;
             letter_calc = headletter - 'a';
-            pinyin_ime->py_num[letter_calc - 1] = offset_count;
             offset_sum += offset_count;
             pinyin_ime->py_pos[letter_calc] = offset_sum;
 
@@ -1006,19 +1009,19 @@ static void pinyin_k9_get_legal_py(lv_obj_t * obj, char * k9_input, const char *
     uint32_t ll_len = 0;
     ime_pinyin_k9_py_str_t * ll_index = NULL;
 
-    ll_len = _lv_ll_get_len(&pinyin_ime->k9_legal_py_ll);
-    ll_index = _lv_ll_get_head(&pinyin_ime->k9_legal_py_ll);
+    ll_len = lv_ll_get_len(&pinyin_ime->k9_legal_py_ll);
+    ll_index = lv_ll_get_head(&pinyin_ime->k9_legal_py_ll);
 
     while(index != -1) {
         if(index == len) {
             if(pinyin_k9_is_valid_py(obj, py_comp)) {
                 if((count >= ll_len) || (ll_len == 0)) {
-                    ll_index = _lv_ll_ins_tail(&pinyin_ime->k9_legal_py_ll);
+                    ll_index = lv_ll_ins_tail(&pinyin_ime->k9_legal_py_ll);
                     lv_strcpy(ll_index->py_str, py_comp);
                 }
                 else if((count < ll_len)) {
                     lv_strcpy(ll_index->py_str, py_comp);
-                    ll_index = _lv_ll_get_next(&pinyin_ime->k9_legal_py_ll, ll_index);
+                    ll_index = lv_ll_get_next(&pinyin_ime->k9_legal_py_ll, ll_index);
                 }
                 count++;
             }
@@ -1096,7 +1099,7 @@ static void pinyin_k9_fill_cand(lv_obj_t * obj)
         cand_len = tmp_len;
     }
 
-    ll_index = _lv_ll_get_head(&pinyin_ime->k9_legal_py_ll);
+    ll_index = lv_ll_get_head(&pinyin_ime->k9_legal_py_ll);
     lv_strcpy(pinyin_ime->input_char, ll_index->py_str);
 
     for(uint8_t i = 0; i < LV_IME_PINYIN_K9_CAND_TEXT_NUM; i++) {
@@ -1111,7 +1114,7 @@ static void pinyin_k9_fill_cand(lv_obj_t * obj)
             lv_strcpy(lv_pinyin_k9_cand_str[index], ll_index->py_str);
         }
 
-        ll_index = _lv_ll_get_next(&pinyin_ime->k9_legal_py_ll, ll_index); /*Find the next list*/
+        ll_index = lv_ll_get_next(&pinyin_ime->k9_legal_py_ll, ll_index); /*Find the next list*/
         index++;
     }
     pinyin_ime->k9_py_ll_pos = index;
@@ -1129,17 +1132,17 @@ static void pinyin_k9_cand_page_proc(lv_obj_t * obj, uint16_t dir)
     lv_ime_pinyin_t * pinyin_ime = (lv_ime_pinyin_t *)obj;
 
     lv_obj_t * ta = lv_keyboard_get_textarea(pinyin_ime->kb);
-    uint16_t ll_len =  _lv_ll_get_len(&pinyin_ime->k9_legal_py_ll);
+    uint16_t ll_len =  lv_ll_get_len(&pinyin_ime->k9_legal_py_ll);
 
     if((ll_len > LV_IME_PINYIN_K9_CAND_TEXT_NUM) && (pinyin_ime->k9_legal_py_count > LV_IME_PINYIN_K9_CAND_TEXT_NUM)) {
         ime_pinyin_k9_py_str_t * ll_index = NULL;
         int count = 0;
 
-        ll_index = _lv_ll_get_head(&pinyin_ime->k9_legal_py_ll);
+        ll_index = lv_ll_get_head(&pinyin_ime->k9_legal_py_ll);
         while(ll_index) {
             if(count >= pinyin_ime->k9_py_ll_pos)   break;
 
-            ll_index = _lv_ll_get_next(&pinyin_ime->k9_legal_py_ll, ll_index); /*Find the next list*/
+            ll_index = lv_ll_get_next(&pinyin_ime->k9_legal_py_ll, ll_index); /*Find the next list*/
             count++;
         }
 
@@ -1161,7 +1164,7 @@ static void pinyin_k9_cand_page_proc(lv_obj_t * obj, uint16_t dir)
                     break;
 
                 lv_strcpy(lv_pinyin_k9_cand_str[count], ll_index->py_str);
-                ll_index = _lv_ll_get_next(&pinyin_ime->k9_legal_py_ll, ll_index); /*Find the next list*/
+                ll_index = lv_ll_get_next(&pinyin_ime->k9_legal_py_ll, ll_index); /*Find the next list*/
                 count++;
             }
             pinyin_ime->k9_py_ll_pos += count - 1;
@@ -1173,12 +1176,12 @@ static void pinyin_k9_cand_page_proc(lv_obj_t * obj, uint16_t dir)
                 lv_strcpy(lv_pinyin_k9_cand_str[i], " ");
             }
             count = LV_IME_PINYIN_K9_CAND_TEXT_NUM - 1;
-            ll_index = _lv_ll_get_prev(&pinyin_ime->k9_legal_py_ll, ll_index);
+            ll_index = lv_ll_get_prev(&pinyin_ime->k9_legal_py_ll, ll_index);
             while(ll_index) {
                 if(count < 0)  break;
 
                 lv_strcpy(lv_pinyin_k9_cand_str[count], ll_index->py_str);
-                ll_index = _lv_ll_get_prev(&pinyin_ime->k9_legal_py_ll, ll_index); /*Find the previous list*/
+                ll_index = lv_ll_get_prev(&pinyin_ime->k9_legal_py_ll, ll_index); /*Find the previous list*/
                 count--;
             }
 

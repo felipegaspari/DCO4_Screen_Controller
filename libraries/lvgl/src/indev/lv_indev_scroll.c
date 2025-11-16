@@ -6,6 +6,8 @@
 /*********************
  *      INCLUDES
  *********************/
+#include "../core/lv_obj_scroll_private.h"
+#include "../core/lv_obj_private.h"
 #include "lv_indev.h"
 #include "lv_indev_private.h"
 #include "lv_indev_scroll.h"
@@ -28,6 +30,7 @@ static int32_t find_snap_point_y(const lv_obj_t * obj, int32_t min, int32_t max,
 static void scroll_limit_diff(lv_indev_t * indev, int32_t * diff_x, int32_t * diff_y);
 static int32_t elastic_diff(lv_obj_t * scroll_obj, int32_t diff, int32_t scroll_start, int32_t scroll_end,
                             lv_dir_t dir);
+static void has_more_snap_points(lv_obj_t * scroll_obj, lv_dir_t dir, bool * has_start_snap, bool * has_end_snap);
 
 /**********************
  *  STATIC VARIABLES
@@ -41,7 +44,7 @@ static int32_t elastic_diff(lv_obj_t * scroll_obj, int32_t diff, int32_t scroll_
  *   GLOBAL FUNCTIONS
  **********************/
 
-void _lv_indev_scroll_handler(lv_indev_t * indev)
+void lv_indev_scroll_handler(lv_indev_t * indev)
 {
     if(indev->pointer.vect.x == 0 && indev->pointer.vect.y == 0) {
         return;
@@ -66,12 +69,20 @@ void _lv_indev_scroll_handler(lv_indev_t * indev)
     int16_t scale_y = 256;
     lv_obj_t * parent = scroll_obj;
     while(parent) {
-        angle += lv_obj_get_style_transform_rotation(parent, 0);
-        int32_t zoom_act_x = lv_obj_get_style_transform_scale_x_safe(parent, 0);
-        int32_t zoom_act_y = lv_obj_get_style_transform_scale_y_safe(parent, 0);
+        angle += lv_obj_get_style_transform_rotation(parent, LV_PART_MAIN);
+        int32_t zoom_act_x = lv_obj_get_style_transform_scale_x_safe(parent, LV_PART_MAIN);
+        int32_t zoom_act_y = lv_obj_get_style_transform_scale_y_safe(parent, LV_PART_MAIN);
         scale_x = (scale_x * zoom_act_x) >> 8;
         scale_y = (scale_y * zoom_act_y) >> 8;
         parent = lv_obj_get_parent(parent);
+    }
+
+    if(scale_x == 0) {
+        scale_x = 1;
+    }
+
+    if(scale_y == 0) {
+        scale_y = 1;
     }
 
     if(angle != 0 || scale_x != LV_SCALE_NONE || scale_y != LV_SCALE_NONE) {
@@ -104,13 +115,13 @@ void _lv_indev_scroll_handler(lv_indev_t * indev)
     /*Respect the scroll limit area*/
     scroll_limit_diff(indev, &diff_x, &diff_y);
 
-    _lv_obj_scroll_by_raw(scroll_obj, diff_x, diff_y);
+    lv_obj_scroll_by_raw(scroll_obj, diff_x, diff_y);
     if(indev->reset_query) return;
     indev->pointer.scroll_sum.x += diff_x;
     indev->pointer.scroll_sum.y += diff_y;
 }
 
-void _lv_indev_scroll_throw_handler(lv_indev_t * indev)
+void lv_indev_scroll_throw_handler(lv_indev_t * indev)
 {
     lv_obj_t * scroll_obj = indev->pointer.scroll_obj;
     if(scroll_obj == NULL) return;
@@ -139,7 +150,7 @@ void _lv_indev_scroll_throw_handler(lv_indev_t * indev)
             indev->pointer.scroll_throw_vect.y = elastic_diff(scroll_obj, indev->pointer.scroll_throw_vect.y, st, sb,
                                                               LV_DIR_VER);
 
-            _lv_obj_scroll_by_raw(scroll_obj, 0,  indev->pointer.scroll_throw_vect.y);
+            lv_obj_scroll_by_raw(scroll_obj, 0,  indev->pointer.scroll_throw_vect.y);
             if(indev->reset_query) return;
         }
         /*With snapping find the nearest snap point and scroll there*/
@@ -165,7 +176,7 @@ void _lv_indev_scroll_throw_handler(lv_indev_t * indev)
             indev->pointer.scroll_throw_vect.x = elastic_diff(scroll_obj, indev->pointer.scroll_throw_vect.x, sl, sr,
                                                               LV_DIR_HOR);
 
-            _lv_obj_scroll_by_raw(scroll_obj, indev->pointer.scroll_throw_vect.x, 0);
+            lv_obj_scroll_by_raw(scroll_obj, indev->pointer.scroll_throw_vect.x, 0);
             if(indev->reset_query) return;
         }
         /*With snapping find the nearest snap point and scroll there*/
@@ -282,12 +293,20 @@ lv_obj_t * lv_indev_find_scroll_obj(lv_indev_t * indev)
         lv_point_t pivot = { 0, 0 };
         lv_obj_t * parent = obj_act;
         while(parent) {
-            angle += lv_obj_get_style_transform_rotation(parent, 0);
-            int32_t zoom_act_x = lv_obj_get_style_transform_scale_x_safe(parent, 0);
-            int32_t zoom_act_y = lv_obj_get_style_transform_scale_y_safe(parent, 0);
+            angle += lv_obj_get_style_transform_rotation(parent, LV_PART_MAIN);
+            int32_t zoom_act_x = lv_obj_get_style_transform_scale_x_safe(parent, LV_PART_MAIN);
+            int32_t zoom_act_y = lv_obj_get_style_transform_scale_y_safe(parent, LV_PART_MAIN);
             scale_x = (scale_x * zoom_act_x) >> 8;
             scale_y = (scale_y * zoom_act_y) >> 8;
             parent = lv_obj_get_parent(parent);
+        }
+
+        if(scale_x == 0) {
+            scale_x = 1;
+        }
+
+        if(scale_y == 0) {
+            scale_y = 1;
         }
 
         lv_point_t obj_scroll_sum = indev->pointer.scroll_sum;
@@ -327,11 +346,43 @@ lv_obj_t * lv_indev_find_scroll_obj(lv_indev_t * indev)
         if((scroll_dir & LV_DIR_TOP) == 0) up_en = false;
         if((scroll_dir & LV_DIR_BOTTOM) == 0) down_en = false;
 
-        /*The object is scrollable to a direction if its content overflow in that direction.*/
-        int32_t st = lv_obj_get_scroll_top(obj_act);
-        int32_t sb = lv_obj_get_scroll_bottom(obj_act);
-        int32_t sl = lv_obj_get_scroll_left(obj_act);
-        int32_t sr = lv_obj_get_scroll_right(obj_act);
+        /*Horizontal scroll*/
+        int32_t sl = 0;
+        int32_t sr = 0;
+        lv_scroll_snap_t snap_x = lv_obj_get_scroll_snap_x(obj_act);
+        if(snap_x == LV_SCROLL_SNAP_NONE) {
+            sl = lv_obj_get_scroll_left(obj_act);
+            sr = lv_obj_get_scroll_right(obj_act);
+        }
+        else {
+            bool has_start_snap;
+            bool has_end_snap;
+            has_more_snap_points(obj_act, LV_DIR_HOR, &has_start_snap, &has_end_snap);
+
+            /*Assume scrolling is there are more snap point
+             *Assumed scroll in if there are NO more nap points*/
+            sl = has_start_snap ? 1 : -1;
+            sr = has_end_snap ? 1 : -1;
+        }
+
+        /*Vertical scroll*/
+        int32_t st = 0;
+        int32_t sb = 0;
+        lv_scroll_snap_t snap_y = lv_obj_get_scroll_snap_y(obj_act);
+        if(snap_y == LV_SCROLL_SNAP_NONE) {
+            st = lv_obj_get_scroll_top(obj_act);
+            sb = lv_obj_get_scroll_bottom(obj_act);
+        }
+        else {
+            bool has_start_snap;
+            bool has_end_snap;
+            has_more_snap_points(obj_act, LV_DIR_VER, &has_start_snap, &has_end_snap);
+
+            /*Assume scrolling is there are more snap point
+             *Assumed scroll in if there are NO more nap points*/
+            st = has_start_snap ? 1 : -1;
+            sb = has_end_snap ? 1 : -1;
+        }
 
         /*If this object is scrollable into the current scroll direction then save it as a candidate.
          *It's important only to be scrollable on the current axis (hor/ver) because if the scroll
@@ -440,6 +491,11 @@ static void init_scroll_limits(lv_indev_t * indev)
         }
     }
 
+    /*`find_snap_point_x/y()` return LV_COORD_MAX is not snap point was found,
+     *but x1/y1 should be small. */
+    if(indev->pointer.scroll_area.x1 == LV_COORD_MAX) indev->pointer.scroll_area.x1 = LV_COORD_MIN;
+    if(indev->pointer.scroll_area.y1 == LV_COORD_MAX) indev->pointer.scroll_area.y1 = LV_COORD_MIN;
+
     /*Allow scrolling on the edges. It will be reverted to the edge due to snapping anyway*/
     if(indev->pointer.scroll_area.x1 == 0) indev->pointer.scroll_area.x1 = LV_COORD_MIN;
     if(indev->pointer.scroll_area.x2 == 0) indev->pointer.scroll_area.x2 = LV_COORD_MAX;
@@ -448,18 +504,19 @@ static void init_scroll_limits(lv_indev_t * indev)
 }
 
 /**
- * Search for snap point in the `min` - `max` range.
+ * Search for snap point in the min..max range.
  * @param obj the object on which snap point should be found
  * @param min ignore snap points smaller than this. (Absolute coordinate)
  * @param max ignore snap points greater than this. (Absolute coordinate)
  * @param ofs offset to snap points. Useful the get a snap point in an imagined case
  *            what if children are already moved by this value
- * @return the distance of the snap point.
+ * @return the absolute x coordinate of the nearest snap point
+ *         or `LV_COORD_MAX` if there is no snap point in the min..max range
  */
 static int32_t find_snap_point_x(const lv_obj_t * obj, int32_t min, int32_t max, int32_t ofs)
 {
     lv_scroll_snap_t align = lv_obj_get_scroll_snap_x(obj);
-    if(align == LV_SCROLL_SNAP_NONE) return 0;
+    if(align == LV_SCROLL_SNAP_NONE) return LV_COORD_MAX;
 
     int32_t dist = LV_COORD_MAX;
 
@@ -499,22 +556,23 @@ static int32_t find_snap_point_x(const lv_obj_t * obj, int32_t min, int32_t max,
         }
     }
 
-    return dist == LV_COORD_MAX ? 0 : -dist;
+    return dist == LV_COORD_MAX ? LV_COORD_MAX : -dist;
 }
 
 /**
- * Search for snap point in the `min` - `max` range.
+ * Search for snap point in the min..max range.
  * @param obj the object on which snap point should be found
  * @param min ignore snap points smaller than this. (Absolute coordinate)
  * @param max ignore snap points greater than this. (Absolute coordinate)
  * @param ofs offset to snap points. Useful to get a snap point in an imagined case
  *            what if children are already moved by this value
- * @return the distance of the snap point.
+ * @return the absolute y coordinate of the nearest snap point
+ *         or `LV_COORD_MAX` if there is no snap point in the min..max range
  */
 static int32_t find_snap_point_y(const lv_obj_t * obj, int32_t min, int32_t max, int32_t ofs)
 {
     lv_scroll_snap_t align = lv_obj_get_scroll_snap_y(obj);
-    if(align == LV_SCROLL_SNAP_NONE) return 0;
+    if(align == LV_SCROLL_SNAP_NONE) return LV_COORD_MAX;
 
     int32_t dist = LV_COORD_MAX;
 
@@ -554,7 +612,7 @@ static int32_t find_snap_point_y(const lv_obj_t * obj, int32_t min, int32_t max,
         }
     }
 
-    return dist == LV_COORD_MAX ? 0 : -dist;
+    return dist == LV_COORD_MAX ? LV_COORD_MAX : -dist;
 }
 
 static void scroll_limit_diff(lv_indev_t * indev, int32_t * diff_x, int32_t * diff_y)
@@ -583,77 +641,128 @@ static void scroll_limit_diff(lv_indev_t * indev, int32_t * diff_x, int32_t * di
 static int32_t elastic_diff(lv_obj_t * scroll_obj, int32_t diff, int32_t scroll_start, int32_t scroll_end,
                             lv_dir_t dir)
 {
-    if(lv_obj_has_flag(scroll_obj, LV_OBJ_FLAG_SCROLL_ELASTIC)) {
-        /*If there is snapping in the current direction don't use the elastic factor because
-         *it's natural that the first and last items are scrolled (snapped) in.*/
+    if(diff == 0) return 0;
+
+    /*Scroll back to the edge if required*/
+    if(!lv_obj_has_flag(scroll_obj, LV_OBJ_FLAG_SCROLL_ELASTIC)) {
+        /*
+         * If the scrolling object does not set the `LV_OBJ_FLAG_SCROLL_ELASTIC` flag,
+         * make sure that `diff` will not cause the scroll to exceed the `start` or `end` boundary of the content.
+         * If the content has exceeded the boundary due to external factors like `LV_SCROLL_SNAP_CENTER`,
+         * then respect the current position instead of going straight back to 0.
+         */
+        const int32_t scroll_ended = diff > 0 ? scroll_start : scroll_end;
+        if(scroll_ended <= 0) diff = 0;
+        else if(scroll_ended - diff < 0) diff = scroll_ended;
+    }
+    /*Handle elastic scrolling*/
+    else {
+
         lv_scroll_snap_t snap;
         snap = dir == LV_DIR_HOR ? lv_obj_get_scroll_snap_x(scroll_obj) : lv_obj_get_scroll_snap_y(scroll_obj);
 
-        lv_obj_t * act_obj = lv_indev_get_active_obj();
-        int32_t snap_point = 0;
-        int32_t act_obj_point = 0;
-
-        if(dir == LV_DIR_HOR) {
-            int32_t pad_left = lv_obj_get_style_pad_left(scroll_obj, LV_PART_MAIN);
-            int32_t pad_right = lv_obj_get_style_pad_right(scroll_obj, LV_PART_MAIN);
-
-            switch(snap) {
-                case LV_SCROLL_SNAP_CENTER:
-                    snap_point = pad_left + (lv_area_get_width(&scroll_obj->coords) - pad_left - pad_right) / 2 + scroll_obj->coords.x1;
-                    act_obj_point = lv_area_get_width(&act_obj->coords) / 2 + act_obj->coords.x1;
-                    break;
-                case LV_SCROLL_SNAP_START:
-                    snap_point = scroll_obj->coords.x1 + pad_left;
-                    act_obj_point = act_obj->coords.x1;
-                    break;
-                case LV_SCROLL_SNAP_END:
-                    snap_point = scroll_obj->coords.x2 - pad_right;
-                    act_obj_point = act_obj->coords.x2;
-                    break;
+        /*Without snapping just scale down the diff when scrolled out*/
+        if(snap == LV_SCROLL_SNAP_NONE) {
+            if(scroll_end < 0 || scroll_start < 0) {
+                /*Rounding*/
+                if(diff < 0) diff -= ELASTIC_SLOWNESS_FACTOR / 2;
+                if(diff > 0) diff += ELASTIC_SLOWNESS_FACTOR / 2;
+                return diff / ELASTIC_SLOWNESS_FACTOR;
             }
+            else {
+                return diff;
+            }
+        }
+
+        /*With snapping the widget is scrolled out if there are no more snap points
+         *at least in one direction (start or end)*/
+        bool has_start_snap;
+        bool has_end_snap;
+        has_more_snap_points(scroll_obj, dir, &has_start_snap, &has_end_snap);
+
+        if(!has_start_snap || !has_end_snap) {
+            /*Rounding*/
+            if(diff < 0) diff -= ELASTIC_SLOWNESS_FACTOR / 2;
+            if(diff > 0) diff += ELASTIC_SLOWNESS_FACTOR / 2;
+            return diff / ELASTIC_SLOWNESS_FACTOR;
         }
         else {
-            int32_t pad_top = lv_obj_get_style_pad_top(scroll_obj, LV_PART_MAIN);
-            int32_t pad_bottom = lv_obj_get_style_pad_bottom(scroll_obj, LV_PART_MAIN);
-
-            switch(snap) {
-                case LV_SCROLL_SNAP_CENTER:
-                    snap_point = pad_top + (lv_area_get_height(&scroll_obj->coords) - pad_top - pad_bottom) / 2 + scroll_obj->coords.y1;
-                    act_obj_point = lv_area_get_height(&act_obj->coords) / 2 + act_obj->coords.y1;
-                    break;
-                case LV_SCROLL_SNAP_START:
-                    snap_point = scroll_obj->coords.y1 + pad_top;
-                    act_obj_point = act_obj->coords.y1;
-                    break;
-                case LV_SCROLL_SNAP_END:
-                    snap_point = scroll_obj->coords.y2 - pad_bottom;
-                    act_obj_point = act_obj->coords.y2;
-                    break;
-            }
+            return diff;
         }
-
-        if(scroll_end < 0) {
-            if(snap != LV_SCROLL_SNAP_NONE && act_obj_point > snap_point) return diff;
-
-            /*Rounding*/
-            if(diff < 0) diff -= ELASTIC_SLOWNESS_FACTOR / 2;
-            if(diff > 0) diff += ELASTIC_SLOWNESS_FACTOR / 2;
-            return diff / ELASTIC_SLOWNESS_FACTOR;
-        }
-        else if(scroll_start < 0) {
-            if(snap != LV_SCROLL_SNAP_NONE && act_obj_point < snap_point) return diff;
-
-            /*Rounding*/
-            if(diff < 0) diff -= ELASTIC_SLOWNESS_FACTOR / 2;
-            if(diff > 0) diff += ELASTIC_SLOWNESS_FACTOR / 2;
-            return diff / ELASTIC_SLOWNESS_FACTOR;
-        }
-    }
-    else {
-        /*Scroll back to the boundary if required*/
-        if(scroll_end + diff < 0) diff = - scroll_end;
-        if(scroll_start - diff < 0) diff = scroll_start;
     }
 
     return diff;
+}
+
+/**
+ * Tell is there are more snap point in a given direction considering snap position.
+ * There is a snap point if there is a snapanble object in the given direction
+ * @param scroll_obj        the object on which snap points should be found
+ * @param dir               LV_DIR_HOR or LV_DIR_VER
+ * @param has_start_snap    true: there is snap point in the start direction (top or left depending on dir)
+ * @param has_end_snap      true: there is snap point in the end direction (bottom or right depending on dir)
+ * @note snap points will be searched relative to the
+ *       center point in case of LV_SCROLL_SNAP_CENTER
+ *       start point (top or left) in case of LV_SCROLL_SNAP_START
+ *       end point (bottom or right) in case of LV_SCROLL_SNAP_END
+ */
+static void has_more_snap_points(lv_obj_t * scroll_obj, lv_dir_t dir, bool * has_start_snap, bool * has_end_snap)
+{
+    *has_start_snap = true;
+    *has_end_snap = true;
+    lv_scroll_snap_t snap;
+    snap = dir == LV_DIR_HOR ? lv_obj_get_scroll_snap_x(scroll_obj) : lv_obj_get_scroll_snap_y(scroll_obj);
+
+    if(dir == LV_DIR_HOR) {
+        int32_t x = 0;
+        switch(snap) {
+            case LV_SCROLL_SNAP_CENTER: {
+                    int32_t pad_left = lv_obj_get_style_pad_left(scroll_obj, LV_PART_MAIN);
+                    int32_t pad_right = lv_obj_get_style_pad_right(scroll_obj, LV_PART_MAIN);
+                    x = scroll_obj->coords.x1;
+                    x += (lv_area_get_width(&scroll_obj->coords) - pad_left - pad_right) / 2;
+                    x += pad_left;
+                }
+                break;
+            case LV_SCROLL_SNAP_START:
+                x = scroll_obj->coords.x1 + lv_obj_get_style_pad_left(scroll_obj, LV_PART_MAIN);
+                break;
+            case LV_SCROLL_SNAP_END:
+                x = scroll_obj->coords.x2 - lv_obj_get_style_pad_right(scroll_obj, LV_PART_MAIN);
+                break;
+            default:
+                break;
+        }
+        int32_t d;
+        d = find_snap_point_x(scroll_obj, x + 1, LV_COORD_MAX, 0);
+        if(d == LV_COORD_MAX) *has_end_snap = false;
+        d = find_snap_point_x(scroll_obj, LV_COORD_MIN, x - 1, 0);
+        if(d == LV_COORD_MAX) *has_start_snap = false;
+    }
+    else {
+        int32_t y = 0;
+        switch(snap) {
+            case LV_SCROLL_SNAP_CENTER: {
+                    int32_t pad_top = lv_obj_get_style_pad_top(scroll_obj, LV_PART_MAIN);
+                    int32_t pad_bottom = lv_obj_get_style_pad_bottom(scroll_obj, LV_PART_MAIN);
+                    y = scroll_obj->coords.y1;
+                    y += (lv_area_get_height(&scroll_obj->coords) - pad_top - pad_bottom) / 2;
+                    y += pad_top;
+                }
+                break;
+            case LV_SCROLL_SNAP_START:
+                y = scroll_obj->coords.y1 + lv_obj_get_style_pad_top(scroll_obj, LV_PART_MAIN);
+                break;
+            case LV_SCROLL_SNAP_END:
+                y = scroll_obj->coords.y2 - lv_obj_get_style_pad_bottom(scroll_obj, LV_PART_MAIN);
+                break;
+            default:
+                break;
+        }
+        int32_t d;
+        d = find_snap_point_y(scroll_obj, y + 1, LV_COORD_MAX, 0);
+        if(d == LV_COORD_MAX) *has_end_snap = false;
+        d = find_snap_point_y(scroll_obj, LV_COORD_MIN, y - 1, 0);
+        if(d == LV_COORD_MAX) *has_start_snap = false;
+    }
 }

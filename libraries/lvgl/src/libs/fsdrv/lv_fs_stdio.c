@@ -7,7 +7,7 @@
  *      INCLUDES
  *********************/
 #include "../../../lvgl.h"
-#if LV_USE_FS_STDIO != '\0'
+#if LV_USE_FS_STDIO
 
 #include <stdio.h>
 #ifndef WIN32
@@ -21,15 +21,18 @@
 /*********************
  *      DEFINES
  *********************/
-#define MAX_PATH_LEN 256
+
+#if !LV_FS_IS_VALID_LETTER(LV_FS_STDIO_LETTER)
+    #error "Invalid drive letter"
+#endif
 
 /**********************
  *      TYPEDEFS
  **********************/
 typedef struct {
-#ifdef WIN32
+#ifdef _WIN32
     HANDLE dir_p;
-    char next_fn[MAX_PATH_LEN];
+    char next_fn[LV_FS_MAX_PATH_LEN];
 #else
     DIR * dir_p;
 #endif
@@ -113,7 +116,7 @@ static void * fs_open(lv_fs_drv_t * drv, const char * path, lv_fs_mode_t mode)
 
     /*Make the path relative to the current directory (the projects root folder)*/
 
-    char buf[MAX_PATH_LEN];
+    char buf[LV_FS_MAX_PATH_LEN];
     lv_snprintf(buf, sizeof(buf), LV_FS_STDIO_PATH "%s", path);
 
     return fopen(buf, flags);
@@ -223,7 +226,7 @@ static void * fs_dir_open(lv_fs_drv_t * drv, const char * path)
     dir_handle_t * handle = (dir_handle_t *)lv_malloc(sizeof(dir_handle_t));
 #ifndef WIN32
     /*Make the path relative to the current directory (the projects root folder)*/
-    char buf[MAX_PATH_LEN];
+    char buf[LV_FS_MAX_PATH_LEN];
     lv_snprintf(buf, sizeof(buf), LV_FS_STDIO_PATH "%s", path);
     handle->dir_p = opendir(buf);
     if(handle->dir_p == NULL) {
@@ -236,7 +239,7 @@ static void * fs_dir_open(lv_fs_drv_t * drv, const char * path)
     WIN32_FIND_DATAA fdata;
 
     /*Make the path relative to the current directory (the projects root folder)*/
-    char buf[MAX_PATH_LEN];
+    char buf[LV_FS_MAX_PATH_LEN];
     lv_snprintf(buf, sizeof(buf), LV_FS_STDIO_PATH "%s\\*", path);
 
     lv_strcpy(handle->next_fn, "");
@@ -276,6 +279,8 @@ static void * fs_dir_open(lv_fs_drv_t * drv, const char * path)
 static lv_fs_res_t fs_dir_read(lv_fs_drv_t * drv, void * dir_p, char * fn, uint32_t fn_len)
 {
     LV_UNUSED(drv);
+    if(fn_len == 0) return LV_FS_RES_INV_PARAM;
+
     dir_handle_t * handle = (dir_handle_t *)dir_p;
 #ifndef WIN32
     struct dirent * entry;
@@ -284,16 +289,16 @@ static lv_fs_res_t fs_dir_read(lv_fs_drv_t * drv, void * dir_p, char * fn, uint3
         if(entry) {
             /*Note, DT_DIR is not defined in C99*/
             if(entry->d_type == DT_DIR) lv_snprintf(fn, fn_len, "/%s", entry->d_name);
-            else lv_strncpy(fn, entry->d_name, fn_len);
+            else lv_strlcpy(fn, entry->d_name, fn_len);
         }
         else {
-            lv_strncpy(fn, "", fn_len);
+            lv_strlcpy(fn, "", fn_len);
         }
     } while(lv_strcmp(fn, "/.") == 0 || lv_strcmp(fn, "/..") == 0);
 #else
-    lv_strncpy(fn, handle->next_fn, fn_len);
+    lv_strlcpy(fn, handle->next_fn, fn_len);
 
-    lv_strncpy(handle->next_fn, "", fn_len);
+    lv_strcpy(handle->next_fn, "");
     WIN32_FIND_DATAA fdata;
 
     if(FindNextFileA(handle->dir_p, &fdata) == false) return LV_FS_RES_OK;

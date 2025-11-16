@@ -6,16 +6,23 @@
 /*********************
  *      INCLUDES
  *********************/
-#include "lv_roller.h"
+#include "lv_roller_private.h"
+#include "../label/lv_label_private.h"
+#include "../../misc/lv_area_private.h"
+#include "../../misc/lv_anim_private.h"
+#include "../../core/lv_obj_private.h"
+#include "../../core/lv_obj_class_private.h"
 #if LV_USE_ROLLER != 0
 
 #include "../../misc/lv_assert.h"
-#include "../../draw/lv_draw.h"
+#include "../../misc/lv_text_private.h"
+#include "../../draw/lv_draw_private.h"
 #include "../../core/lv_group.h"
 #include "../../indev/lv_indev.h"
 #include "../../indev/lv_indev_scroll.h"
 #include "../../indev/lv_indev_private.h"
 #include "../../stdlib/lv_string.h"
+#include "../../others/observer/lv_observer_private.h"
 
 /*********************
  *      DEFINES
@@ -46,9 +53,34 @@ static void scroll_anim_completed_cb(lv_anim_t * a);
 static void set_y_anim(void * obj, int32_t v);
 static void transform_vect_recursive(lv_obj_t * roller, lv_point_t * vect);
 
+#if LV_USE_OBSERVER
+    static void roller_value_changed_event_cb(lv_event_t * e);
+    static void roller_value_observer_cb(lv_observer_t * observer, lv_subject_t * subject);
+#endif /*LV_USE_OBSERVER*/
+
 /**********************
  *  STATIC VARIABLES
  **********************/
+#if LV_USE_OBJ_PROPERTY
+static const lv_property_ops_t properties[] = {
+    {
+        .id = LV_PROPERTY_ROLLER_OPTIONS,
+        .setter = lv_roller_set_options,
+        .getter = lv_roller_get_options,
+    },
+    {
+        .id = LV_PROPERTY_ROLLER_SELECTED,
+        .setter = lv_roller_set_selected,
+        .getter = lv_roller_get_selected,
+    },
+    {
+        .id = LV_PROPERTY_ROLLER_VISIBLE_ROW_COUNT,
+        .setter = lv_roller_set_visible_row_count,
+        .getter = NULL,
+    },
+};
+#endif
+
 const lv_obj_class_t lv_roller_class = {
     .constructor_cb = lv_roller_constructor,
     .event_cb = lv_roller_event,
@@ -58,14 +90,25 @@ const lv_obj_class_t lv_roller_class = {
     .editable = LV_OBJ_CLASS_EDITABLE_TRUE,
     .group_def = LV_OBJ_CLASS_GROUP_DEF_TRUE,
     .base_class = &lv_obj_class,
-    .name = "roller",
+    .name = "lv_roller",
+#if LV_USE_OBJ_PROPERTY
+    .prop_index_start = LV_PROPERTY_ROLLER_START,
+    .prop_index_end = LV_PROPERTY_ROLLER_END,
+    .properties = properties,
+    .properties_count = sizeof(properties) / sizeof(properties[0]),
+
+#if LV_USE_OBJ_PROPERTY_NAME
+    .property_names = lv_roller_property_names,
+    .names_count = sizeof(lv_roller_property_names) / sizeof(lv_property_name_t),
+#endif
+#endif
 };
 
 const lv_obj_class_t lv_roller_label_class  = {
     .event_cb = lv_roller_label_event,
     .instance_size = sizeof(lv_label_t),
     .base_class = &lv_label_class,
-    .name = "roller-label",
+    .name = "lv_roller_label",
 };
 
 /**********************
@@ -114,20 +157,27 @@ void lv_roller_set_options(lv_obj_t * obj, const char * options, lv_roller_mode_
     else {
         roller->mode = LV_ROLLER_MODE_INFINITE;
 
-        const lv_font_t * font = lv_obj_get_style_text_font(obj, 0);
-        int32_t normal_h = roller->option_cnt * (lv_font_get_line_height(font) + lv_obj_get_style_text_letter_space(obj, 0));
+        const lv_font_t * font = lv_obj_get_style_text_font(obj, LV_PART_MAIN);
+        int32_t normal_h = roller->option_cnt * (lv_font_get_line_height(font) + lv_obj_get_style_text_letter_space(obj,
+                                                                                                                    LV_PART_MAIN));
         roller->inf_page_cnt = LV_CLAMP(3, EXTRA_INF_SIZE / normal_h, 15);
         if(!(roller->inf_page_cnt & 1)) roller->inf_page_cnt++;   /*Make it odd*/
         LV_LOG_INFO("Using %" LV_PRIu32 " pages to make the roller look infinite", roller->inf_page_cnt);
 
         size_t opt_len = lv_strlen(options) + 1; /*+1 to add '\n' after option lists*/
-        char * opt_extra = lv_malloc(opt_len * roller->inf_page_cnt);
+        size_t opt_extra_len = opt_len * roller->inf_page_cnt;
+        if(opt_extra_len == 0) {
+            /*Prevent write overflow*/
+            opt_extra_len = 1;
+        }
+
+        char * opt_extra = lv_malloc(opt_extra_len);
         uint32_t i;
         for(i = 0; i < roller->inf_page_cnt; i++) {
             lv_strcpy(&opt_extra[opt_len * i], options);
             opt_extra[opt_len * (i + 1) - 1] = '\n';
         }
-        opt_extra[opt_len * roller->inf_page_cnt - 1] = '\0';
+        opt_extra[opt_extra_len - 1] = '\0';
         lv_label_set_text(label, opt_extra);
         lv_free(opt_extra);
 
@@ -141,7 +191,6 @@ void lv_roller_set_options(lv_obj_t * obj, const char * options, lv_roller_mode_
 
     /*If the selected text has larger font the label needs some extra draw padding to draw it.*/
     lv_obj_refresh_ext_draw_size(label);
-
 }
 
 void lv_roller_set_selected(lv_obj_t * obj, uint32_t sel_opt, lv_anim_enable_t anim)
@@ -178,6 +227,33 @@ void lv_roller_set_selected(lv_obj_t * obj, uint32_t sel_opt, lv_anim_enable_t a
     refr_position(obj, anim);
 }
 
+bool lv_roller_set_selected_str(lv_obj_t * obj, const char * sel_opt, lv_anim_enable_t anim)
+{
+    const char * options = lv_roller_get_options(obj);
+    size_t options_len = lv_strlen(options);
+
+    bool option_found = false;
+
+    uint32_t current_option = 0;
+    size_t line_start = 0;
+
+    for(size_t i = 0; i < options_len; i++) {
+        if(options[i] == '\n') {
+            /* See if this is the correct option */
+            if(lv_strncmp(&options[line_start], sel_opt, i - line_start) == 0) {
+                lv_roller_set_selected(obj, current_option, anim);
+                option_found = true;
+                break;
+            }
+
+            current_option++;
+            line_start = i + 1;
+        }
+    }
+
+    return option_found;
+}
+
 void lv_roller_set_visible_row_count(lv_obj_t * obj, uint32_t row_cnt)
 {
     LV_ASSERT_OBJ(obj, MY_CLASS);
@@ -211,26 +287,7 @@ void lv_roller_get_selected_str(const lv_obj_t * obj, char * buf, uint32_t buf_s
     LV_ASSERT_OBJ(obj, MY_CLASS);
 
     lv_roller_t * roller = (lv_roller_t *)obj;
-    lv_obj_t * label = get_label(obj);
-    uint32_t i;
-    uint32_t line        = 0;
-    const char * opt_txt = lv_label_get_text(label);
-    size_t txt_len     = lv_strlen(opt_txt);
-
-    for(i = 0; i < txt_len && line != roller->sel_opt_id; i++) {
-        if(opt_txt[i] == '\n') line++;
-    }
-
-    uint32_t c;
-    for(c = 0; i < txt_len && opt_txt[i] != '\n'; c++, i++) {
-        if(buf_size && c >= buf_size - 1) {
-            LV_LOG_WARN("the buffer was too small");
-            break;
-        }
-        buf[c] = opt_txt[i];
-    }
-
-    buf[c] = '\0';
+    lv_roller_get_option_str(obj, roller->sel_opt_id, buf, buf_size);
 }
 
 /**
@@ -256,6 +313,56 @@ uint32_t lv_roller_get_option_count(const lv_obj_t * obj)
     else {
         return roller->option_cnt;
     }
+}
+
+#if LV_USE_OBSERVER
+
+lv_observer_t * lv_roller_bind_value(lv_obj_t * obj, lv_subject_t * subject)
+{
+    LV_ASSERT_NULL(subject);
+    LV_ASSERT_NULL(obj);
+
+    if(subject->type != LV_SUBJECT_TYPE_INT) {
+        LV_LOG_WARN("Incompatible subject type: %d", subject->type);
+        return NULL;
+    }
+
+    lv_obj_add_event_cb(obj, roller_value_changed_event_cb, LV_EVENT_VALUE_CHANGED, subject);
+
+    lv_observer_t * observer = lv_subject_add_observer_obj(subject, roller_value_observer_cb, obj, NULL);
+    return observer;
+}
+#endif /*LV_USE_OBSERVER*/
+
+lv_result_t lv_roller_get_option_str(const lv_obj_t * obj, uint32_t option, char * buf, uint32_t buf_size)
+{
+    LV_ASSERT_OBJ(obj, MY_CLASS);
+
+    lv_obj_t * label = get_label(obj);
+    uint32_t i;
+    uint32_t line        = 0;
+    const char * opt_txt = lv_label_get_text(label);
+    size_t txt_len     = lv_strlen(opt_txt);
+
+    for(i = 0; i < txt_len && line != option; i++) {
+        if(opt_txt[i] == '\n') line++;
+    }
+
+    if(line != option) {
+        return LV_RESULT_INVALID;
+    }
+
+    uint32_t c;
+    for(c = 0; i < txt_len && opt_txt[i] != '\n'; c++, i++) {
+        if(buf_size && c >= buf_size - 1) {
+            LV_LOG_WARN("the buffer was too small");
+            break;
+        }
+        buf[c] = opt_txt[i];
+    }
+
+    buf[c] = '\0';
+    return LV_RESULT_OK;
 }
 
 /**********************
@@ -313,22 +420,32 @@ static void lv_roller_event(const lv_obj_class_t * class_p, lv_event_t * e)
         refr_position(obj, LV_ANIM_OFF);
     }
     else if(code == LV_EVENT_PRESSED) {
+        if(roller->option_cnt <= 1) return;
+
         roller->moved = 0;
         lv_anim_delete(get_label(obj), set_y_anim);
     }
+    else if(code == LV_EVENT_CLICKED) {
+        if(roller->moved == 1) {
+            lv_event_stop_processing(e);
+        }
+    }
     else if(code == LV_EVENT_PRESSING) {
+        if(roller->option_cnt <= 1) return;
+
         lv_indev_t * indev = lv_indev_active();
         lv_point_t p;
         lv_indev_get_vect(indev, &p);
-
         transform_vect_recursive(obj, &p);
         if(p.y) {
             lv_obj_t * label = get_label(obj);
-            lv_obj_set_y(label, lv_obj_get_y(label) + p.y);
+            lv_obj_set_y(label, lv_obj_get_y_aligned(label) + p.y);
             roller->moved = 1;
         }
     }
     else if(code == LV_EVENT_RELEASED || code == LV_EVENT_PRESS_LOST) {
+        if(roller->option_cnt <= 1) return;
+
         release_handler(obj);
     }
     else if(code == LV_EVENT_FOCUSED) {
@@ -364,6 +481,8 @@ static void lv_roller_event(const lv_obj_class_t * class_p, lv_event_t * e)
         }
     }
     else if(code == LV_EVENT_KEY) {
+        if(roller->option_cnt <= 1) return;
+
         uint32_t c = lv_event_get_key(e);
         if(c == LV_KEY_RIGHT || c == LV_KEY_DOWN) {
             if(roller->sel_opt_id + 1 < roller->option_cnt) {
@@ -381,6 +500,8 @@ static void lv_roller_event(const lv_obj_class_t * class_p, lv_event_t * e)
         }
     }
     else if(code == LV_EVENT_ROTARY) {
+        if(roller->option_cnt <= 1) return;
+
         int32_t r = lv_event_get_rotary_diff(e);
         int32_t new_id = roller->sel_opt_id + r;
         new_id = LV_CLAMP(0, new_id, (int32_t)roller->option_cnt - 1);
@@ -441,6 +562,7 @@ static void draw_main(lv_event_t * e)
         get_sel_area(obj, &sel_area);
         lv_draw_rect_dsc_t sel_dsc;
         lv_draw_rect_dsc_init(&sel_dsc);
+        sel_dsc.base.layer = layer;
         lv_obj_init_draw_rect_dsc(obj, LV_PART_SELECTED, &sel_dsc);
         lv_draw_rect(layer, &sel_dsc, &sel_area);
     }
@@ -450,38 +572,50 @@ static void draw_main(lv_event_t * e)
 
         lv_draw_label_dsc_t label_dsc;
         lv_draw_label_dsc_init(&label_dsc);
+        label_dsc.base.layer = layer;
         lv_obj_init_draw_label_dsc(obj, LV_PART_SELECTED, &label_dsc);
+
+        lv_text_attributes_t attributes = {0};
+        attributes.letter_space = label_dsc.letter_space;
+        attributes.line_space = label_dsc.line_space;
+        attributes.max_width = lv_obj_get_width(obj);
+        attributes.text_flags = LV_TEXT_FLAG_EXPAND;
 
         /*Redraw the text on the selected area*/
         lv_area_t sel_area;
         get_sel_area(obj, &sel_area);
         lv_area_t mask_sel;
         bool area_ok;
-        area_ok = _lv_area_intersect(&mask_sel, &layer->_clip_area, &sel_area);
+        area_ok = lv_area_intersect(&mask_sel, &layer->_clip_area, &sel_area);
         if(area_ok) {
             lv_obj_t * label = get_label(obj);
+            if(lv_label_get_recolor(label)) label_dsc.flag |= LV_TEXT_FLAG_RECOLOR;
 
             /*Get the size of the "selected text"*/
-            lv_point_t res_p;
-            lv_text_get_size(&res_p, lv_label_get_text(label), label_dsc.font, label_dsc.letter_space, label_dsc.line_space,
-                             lv_obj_get_width(obj), LV_TEXT_FLAG_EXPAND);
+            lv_point_t label_sel_size;
+            lv_text_get_size_attributes(&label_sel_size, lv_label_get_text(label), label_dsc.font, &attributes);
 
             /*Move the selected label proportionally with the background label*/
             int32_t roller_h = lv_obj_get_height(obj);
-            int32_t label_y_prop = label->coords.y1 - (roller_h / 2 +
-                                                       obj->coords.y1); /*label offset from the middle line of the roller*/
-            label_y_prop = (label_y_prop * 16384) / lv_obj_get_height(
-                               label); /*Proportional position from the middle line (upscaled by << 14)*/
-
-            /*Apply a correction with different line heights*/
             const lv_font_t * normal_label_font = lv_obj_get_style_text_font(obj, LV_PART_MAIN);
-            int32_t corr = (label_dsc.font->line_height - normal_label_font->line_height) / 2;
+            /*label offset from the middle line of the roller*/
+            int32_t label_y_prop = (label->coords.y1 + normal_label_font->line_height / 2) - (roller_h / 2 + obj->coords.y1);
+
+            /*Proportional position from the middle line.
+             *Will be 0 for the first option, and 1 for the last option (upscaled by << 14)*/
+            int32_t remain_h = lv_obj_get_height(label) - normal_label_font->line_height;
+            if(remain_h > 0) {
+                label_y_prop = (label_y_prop << 14) / remain_h;
+            }
+
+            /*We don't want the selected label start and end exactly where the normal label is as
+             *a larger font won't centered on selected area.*/
+            int32_t corr = label_dsc.font->line_height;
 
             /*Apply the proportional position to the selected text*/
-            res_p.y -= corr;
             int32_t label_sel_y = roller_h / 2 + obj->coords.y1;
-            label_sel_y += (label_y_prop * res_p.y) >> 14;
-            label_sel_y -= corr;
+            label_sel_y += ((label_sel_size.y - corr) * label_y_prop) >> 14;
+            label_sel_y -= corr / 2;
 
             int32_t bwidth = lv_obj_get_style_border_width(obj, LV_PART_MAIN);
             int32_t pleft = lv_obj_get_style_pad_left(obj, LV_PART_MAIN);
@@ -492,7 +626,7 @@ static void draw_main(lv_event_t * e)
             label_sel_area.x1 = obj->coords.x1 + pleft + bwidth;
             label_sel_area.y1 = label_sel_y;
             label_sel_area.x2 = obj->coords.x2 - pright - bwidth;
-            label_sel_area.y2 = label_sel_area.y1 + res_p.y;
+            label_sel_area.y2 = label_sel_area.y1 + label_sel_size.y;
 
             label_dsc.flag |= LV_TEXT_FLAG_EXPAND;
             const lv_area_t clip_area_ori = layer->_clip_area;
@@ -510,18 +644,19 @@ static void draw_label(lv_event_t * e)
      * and a lower (below the selected area)*/
     lv_obj_t * label_obj = lv_event_get_current_target(e);
     lv_obj_t * roller = lv_obj_get_parent(label_obj);
+    lv_layer_t * layer = lv_event_get_layer(e);
     lv_draw_label_dsc_t label_draw_dsc;
     lv_draw_label_dsc_init(&label_draw_dsc);
+    label_draw_dsc.base.layer = layer;
     lv_obj_init_draw_label_dsc(roller, LV_PART_MAIN, &label_draw_dsc);
-
-    lv_layer_t * layer = lv_event_get_layer(e);
+    if(lv_label_get_recolor(label_obj)) label_draw_dsc.flag |= LV_TEXT_FLAG_RECOLOR;
 
     /*If the roller has shadow or outline it has some ext. draw size
      *therefore the label can overflow the roller's boundaries.
      *To solve this limit the clip area to the "plain" roller.*/
     const lv_area_t clip_area_ori = layer->_clip_area;
     lv_area_t roller_clip_area;
-    if(!_lv_area_intersect(&roller_clip_area, &layer->_clip_area, &roller->coords)) return;
+    if(!lv_area_intersect(&roller_clip_area, &layer->_clip_area, &roller->coords)) return;
     layer->_clip_area = roller_clip_area;
 
     lv_area_t sel_area;
@@ -532,7 +667,7 @@ static void draw_label(lv_event_t * e)
     clip2.y1 = label_obj->coords.y1;
     clip2.x2 = label_obj->coords.x2;
     clip2.y2 = sel_area.y1;
-    if(_lv_area_intersect(&clip2, &layer->_clip_area, &clip2)) {
+    if(lv_area_intersect(&clip2, &layer->_clip_area, &clip2)) {
         const lv_area_t clip_area_ori2 = layer->_clip_area;
         layer->_clip_area = clip2;
         label_draw_dsc.text = lv_label_get_text(label_obj);
@@ -544,7 +679,7 @@ static void draw_label(lv_event_t * e)
     clip2.y1 = sel_area.y2;
     clip2.x2 = label_obj->coords.x2;
     clip2.y2 = label_obj->coords.y2;
-    if(_lv_area_intersect(&clip2, &layer->_clip_area, &clip2)) {
+    if(lv_area_intersect(&clip2, &layer->_clip_area, &clip2)) {
         const lv_area_t clip_area_ori2 = layer->_clip_area;
         layer->_clip_area = clip2;
         label_draw_dsc.text = lv_label_get_text(label_obj);
@@ -678,7 +813,7 @@ static lv_result_t release_handler(lv_obj_t * obj)
 
             uint32_t letter_cnt = 0;
             for(letter_cnt = 0; letter_cnt < letter_i; letter_cnt++) {
-                uint32_t letter = _lv_text_encoded_next(txt, &i);
+                uint32_t letter = lv_text_encoded_next(txt, &i);
                 /*Count he lines to reach the clicked letter. But ignore the last '\n' because it
                  * still belongs to the clicked line*/
                 if(letter == '\n' && i_prev != letter_i) new_opt++;
@@ -765,11 +900,15 @@ static int32_t get_selected_label_width(const lv_obj_t * obj)
     lv_obj_t * label = get_label(obj);
     if(label == NULL) return 0;
 
+    lv_text_attributes_t attributes = {0};
     const lv_font_t * font = lv_obj_get_style_text_font(obj, LV_PART_SELECTED);
-    int32_t letter_space = lv_obj_get_style_text_letter_space(obj, LV_PART_SELECTED);
+    attributes.letter_space = lv_obj_get_style_text_letter_space(obj, LV_PART_SELECTED);
+    attributes.max_width = LV_COORD_MAX;
+    attributes.text_flags = LV_TEXT_FLAG_NONE;
+
     const char * txt = lv_label_get_text(label);
     lv_point_t size;
-    lv_text_get_size(&size, txt, font, letter_space, 0, LV_COORD_MAX,  LV_TEXT_FLAG_NONE);
+    lv_text_get_size_attributes(&size, txt, font, &attributes);
     return size.x;
 }
 
@@ -791,18 +930,46 @@ static void transform_vect_recursive(lv_obj_t * roller, lv_point_t * vect)
     int32_t scale_y = 256;
     lv_obj_t * parent = roller;
     while(parent) {
-        angle += lv_obj_get_style_transform_rotation(parent, 0);
-        int32_t zoom_act_x = lv_obj_get_style_transform_scale_x_safe(parent, 0);
-        int32_t zoom_act_y = lv_obj_get_style_transform_scale_y_safe(parent, 0);
-        scale_x = (scale_y * zoom_act_x) >> 8;
+        angle += lv_obj_get_style_transform_rotation(parent, LV_PART_MAIN);
+        int32_t zoom_act_x = lv_obj_get_style_transform_scale_x_safe(parent, LV_PART_MAIN);
+        int32_t zoom_act_y = lv_obj_get_style_transform_scale_y_safe(parent, LV_PART_MAIN);
+        scale_x = (scale_x * zoom_act_x) >> 8;
         scale_y = (scale_y * zoom_act_y) >> 8;
         parent = lv_obj_get_parent(parent);
     }
     lv_point_t pivot = { 0, 0 };
 
+    if(scale_x == 0) {
+        scale_x = 1;
+    }
+
+    if(scale_y == 0) {
+        scale_y = 1;
+    }
+
     scale_x = 256 * 256 / scale_x;
     scale_y = 256 * 256 / scale_y;
     lv_point_transform(vect, -angle, scale_x, scale_y, &pivot, false);
 }
+
+#if LV_USE_OBSERVER
+
+static void roller_value_changed_event_cb(lv_event_t * e)
+{
+    lv_obj_t * roller = lv_event_get_current_target(e);
+    lv_subject_t * subject = lv_event_get_user_data(e);
+
+    lv_subject_set_int(subject, lv_roller_get_selected(roller));
+}
+
+static void roller_value_observer_cb(lv_observer_t * observer, lv_subject_t * subject)
+{
+    if((int32_t)lv_roller_get_selected(observer->target) != subject->value.num) {
+        lv_roller_set_selected(observer->target, subject->value.num, LV_ANIM_OFF);
+    }
+}
+
+#endif /*LV_USE_OBSERVER*/
+
 
 #endif

@@ -3,8 +3,8 @@
  *
  */
 
-#ifndef LV_FONT_LOADER_H
-#define LV_FONT_LOADER_H
+#ifndef LV_BINFONT_LOADER_H
+#define LV_BINFONT_LOADER_H
 
 #ifdef __cplusplus
 extern "C" {
@@ -22,16 +22,26 @@ extern "C" {
  *      TYPEDEFS
  **********************/
 
+
+typedef struct {
+    uint32_t font_size; /**< Size of the font in pixels*/
+    const char * path; /**< Path to font file*/
+    const void * buffer; /**< Address of the font file in the memory*/
+    uint32_t buffer_size; /**< Size of the font file buffer*/
+} lv_binfont_font_src_t;
+
+LV_ATTRIBUTE_EXTERN_DATA extern const lv_font_class_t lv_binfont_font_class;
+
 /**********************
  * GLOBAL PROTOTYPES
  **********************/
 
 /**
  * Loads a `lv_font_t` object from a binary font file
- * @param path          path where the font file is located
- * @return              pointer to font where to load
+ * @param path   path to font file
+ * @return  pointer to font where to load
  */
-lv_font_t * lv_binfont_create(const char * font_name);
+lv_font_t * lv_binfont_create(const char * path);
 
 #if LV_USE_FS_MEMFS
 /**
@@ -58,4 +68,4 @@ void lv_binfont_destroy(lv_font_t * font);
 } /*extern "C"*/
 #endif
 
-#endif /*LV_FONT_LOADER_H*/
+#endif /* LV_BINFONT_LOADER_H */

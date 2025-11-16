@@ -1,5 +1,6 @@
 # TcMenu library for Arduino and mbed.
 [![PlatformIO](https://github.com/TcMenu/tcMenuLib/actions/workflows/platformio.yml/badge.svg)](https://github.com/TcMenu/tcMenuLib/actions/workflows/platformio.yml)
+[![Test](https://github.com/TcMenu/tcMenuLib/actions/workflows/test.yml/badge.svg)](https://github.com/TcMenu/tcMenuLib/actions/workflows/test.yml)
 [![License: Apache 2.0](https://img.shields.io/badge/license-Apache--2.0-green.svg)](https://github.com/TcMenu/tcMenuLib/blob/main/LICENSE)
 [![GitHub release](https://img.shields.io/github/release/TcMenu/tcMenuLib.svg?maxAge=3600)](https://github.com/TcMenu/tcMenuLib/releases)
 [![davetcc](https://img.shields.io/badge/davetcc-dev-blue.svg)](https://github.com/davetcc)
@@ -7,7 +8,7 @@
 
 ## Summary
 
-Dave Cherry / TheCodersCorner.com made this framework available for you to use. It takes me significant effort to keep all my libraries current and working on a wide range of boards. Please consider making at least a one off donation via the sponsor button if you find it useful.
+TcMenu organisation made this framework available for you to use. It takes significant effort to keep all our libraries current and working on a wide range of boards. Please consider making at least a one off donation via the sponsor button if you find it useful.
 
 <a href="https://www.buymeacoffee.com/davetcc" target="_blank"><img src="https://cdn.buymeacoffee.com/buttons/v2/default-blue.png" alt="Buy Me A Coffee" style="height: 60px !important;width: 217px !important;" ></a>
 

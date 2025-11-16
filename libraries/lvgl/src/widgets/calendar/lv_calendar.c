@@ -6,7 +6,9 @@
 /*********************
  *      INCLUDES
  *********************/
-#include "lv_calendar.h"
+#include "lv_calendar_private.h"
+#include "../../draw/lv_draw_private.h"
+#include "../../core/lv_obj_class_private.h"
 #include "../../../lvgl.h"
 #if LV_USE_CALENDAR
 
@@ -35,6 +37,13 @@ static uint8_t get_month_length(int32_t year, int32_t month);
 static uint8_t is_leap_year(uint32_t year);
 static void highlight_update(lv_obj_t * calendar);
 
+#if LV_USE_CALENDAR_CHINESE
+static lv_calendar_date_t gregorian_get_last_month_time(lv_calendar_date_t * time);
+static lv_calendar_date_t gregorian_get_next_month_time(lv_calendar_date_t * time);
+static void chinese_calendar_set_day_name(lv_obj_t * calendar, uint8_t index, uint8_t day,
+                                          lv_calendar_date_t * gregorian_time);
+#endif
+
 /**********************
  *  STATIC VARIABLES
  **********************/
@@ -46,7 +55,7 @@ const lv_obj_class_t lv_calendar_class = {
     .group_def = LV_OBJ_CLASS_GROUP_DEF_TRUE,
     .instance_size = sizeof(lv_calendar_t),
     .base_class = &lv_obj_class,
-    .name = "calendar",
+    .name = "lv_calendar",
 };
 
 static const char * day_names_def[7] = LV_CALENDAR_DEFAULT_DAY_NAMES;
@@ -88,11 +97,36 @@ void lv_calendar_set_today_date(lv_obj_t * obj, uint32_t year, uint32_t month, u
     LV_ASSERT_OBJ(obj, MY_CLASS);
     lv_calendar_t * calendar = (lv_calendar_t *)obj;
 
+    if(calendar->today.year == year && calendar->today.month == month
+       && calendar->today.day == day) return;
+
     calendar->today.year         = year;
     calendar->today.month        = month;
     calendar->today.day          = day;
 
     highlight_update(obj);
+}
+
+void lv_calendar_set_today_year(lv_obj_t * obj, uint32_t year)
+{
+    LV_ASSERT_OBJ(obj, MY_CLASS);
+    lv_calendar_t * calendar = (lv_calendar_t *)obj;
+    lv_calendar_set_today_date(obj, year, calendar->today.month, calendar->today.day);
+
+}
+
+void lv_calendar_set_today_month(lv_obj_t * obj, uint32_t month)
+{
+    LV_ASSERT_OBJ(obj, MY_CLASS);
+    lv_calendar_t * calendar = (lv_calendar_t *)obj;
+    lv_calendar_set_today_date(obj, calendar->today.year, month, calendar->today.day);
+}
+
+void lv_calendar_set_today_day(lv_obj_t * obj, uint32_t day)
+{
+    LV_ASSERT_OBJ(obj, MY_CLASS);
+    lv_calendar_t * calendar = (lv_calendar_t *)obj;
+    lv_calendar_set_today_date(obj, calendar->today.year, calendar->today.month, day);
 }
 
 void lv_calendar_set_highlighted_dates(lv_obj_t * obj, lv_calendar_date_t highlighted[], size_t date_num)
@@ -108,10 +142,13 @@ void lv_calendar_set_highlighted_dates(lv_obj_t * obj, lv_calendar_date_t highli
     highlight_update(obj);
 }
 
-void lv_calendar_set_showed_date(lv_obj_t * obj, uint32_t year, uint32_t month)
+void lv_calendar_set_month_shown(lv_obj_t * obj, uint32_t year, uint32_t month)
 {
     LV_ASSERT_OBJ(obj, MY_CLASS);
     lv_calendar_t * calendar = (lv_calendar_t *)obj;
+
+    /*Don't return if the new value is the same, as this function is also
+     *used the update the calendar e.g. when switching to Chinese mode*/
 
     calendar->showed_date.year   = year;
     calendar->showed_date.month  = month;
@@ -133,18 +170,54 @@ void lv_calendar_set_showed_date(lv_obj_t * obj, uint32_t year, uint32_t month)
     uint8_t act_mo_len = get_month_length(d.year, d.month);
     uint8_t day_first = get_day_of_week(d.year, d.month, 1);
     uint8_t c;
+
+#if LV_USE_CALENDAR_CHINESE
+    lv_calendar_date_t gregorian_time;
+    gregorian_time = d;
+#endif
+
     for(i = day_first, c = 1; i < act_mo_len + day_first; i++, c++) {
-        lv_snprintf(calendar->nums[i], sizeof(calendar->nums[0]), "%d", c);
+#if LV_USE_CALENDAR_CHINESE
+        if(calendar->use_chinese_calendar) {
+            gregorian_time.day = c;
+            chinese_calendar_set_day_name(obj, i, c, &gregorian_time);
+        }
+        else
+#endif
+            lv_snprintf(calendar->nums[i], sizeof(calendar->nums[0]), "%d", c);
     }
 
     uint8_t prev_mo_len = get_month_length(d.year, d.month - 1);
+
+#if LV_USE_CALENDAR_CHINESE
+    gregorian_time = gregorian_get_last_month_time(&d);
+#endif
+
     for(i = 0, c = prev_mo_len - day_first + 1; i < day_first; i++, c++) {
-        lv_snprintf(calendar->nums[i], sizeof(calendar->nums[0]), "%d", c);
+#if LV_USE_CALENDAR_CHINESE
+        if(calendar->use_chinese_calendar) {
+            gregorian_time.day = c;
+            chinese_calendar_set_day_name(obj, i, c, &gregorian_time);
+        }
+        else
+#endif
+            lv_snprintf(calendar->nums[i], sizeof(calendar->nums[0]), "%d", c);
         lv_buttonmatrix_set_button_ctrl(calendar->btnm, i + 7, LV_BUTTONMATRIX_CTRL_DISABLED);
     }
 
+#if LV_USE_CALENDAR_CHINESE
+    gregorian_time = gregorian_get_next_month_time(&d);
+#endif
+
     for(i = day_first + act_mo_len, c = 1; i < 6 * 7; i++, c++) {
-        lv_snprintf(calendar->nums[i], sizeof(calendar->nums[0]), "%d", c);
+#if LV_USE_CALENDAR_CHINESE
+        if(calendar->use_chinese_calendar) {
+            gregorian_time.day = c;
+            chinese_calendar_set_day_name(obj, i, c, &gregorian_time);
+        }
+        else
+#endif
+            lv_snprintf(calendar->nums[i], sizeof(calendar->nums[0]), "%d", c);
         lv_buttonmatrix_set_button_ctrl(calendar->btnm, i + 7, LV_BUTTONMATRIX_CTRL_DISABLED);
     }
 
@@ -165,6 +238,21 @@ void lv_calendar_set_showed_date(lv_obj_t * obj, uint32_t year, uint32_t month)
         if(child == calendar->btnm) continue;
         lv_obj_send_event(child, LV_EVENT_VALUE_CHANGED, obj);
     }
+}
+
+void lv_calendar_set_shown_year(lv_obj_t * obj, uint32_t year)
+{
+    LV_ASSERT_OBJ(obj, MY_CLASS);
+    lv_calendar_t * calendar = (lv_calendar_t *)obj;
+    lv_calendar_set_month_shown(obj, year, calendar->showed_date.month);
+
+}
+
+void lv_calendar_set_shown_month(lv_obj_t * obj, uint32_t month)
+{
+    LV_ASSERT_OBJ(obj, MY_CLASS);
+    lv_calendar_t * calendar = (lv_calendar_t *)obj;
+    lv_calendar_set_month_shown(obj, calendar->showed_date.year, month);
 }
 
 /*=====================
@@ -243,19 +331,6 @@ static void lv_calendar_constructor(const lv_obj_class_t * class_p, lv_obj_t * o
     LV_UNUSED(class_p);
     lv_calendar_t * calendar = (lv_calendar_t *)obj;
 
-    /*Initialize the allocated 'ext'*/
-
-    calendar->today.year  = 2024;
-    calendar->today.month = 1;
-    calendar->today.day   = 1;
-
-    calendar->showed_date.year  = 2024;
-    calendar->showed_date.month = 1;
-    calendar->showed_date.day   = 1;
-
-    calendar->highlighted_dates      = NULL;
-    calendar->highlighted_dates_num  = 0;
-
     lv_memzero(calendar->nums, sizeof(calendar->nums));
     uint8_t i;
     uint8_t j = 0;
@@ -285,8 +360,10 @@ static void lv_calendar_constructor(const lv_obj_class_t * class_p, lv_obj_t * o
     lv_obj_set_flex_flow(obj, LV_FLEX_FLOW_COLUMN);
     lv_obj_set_flex_grow(calendar->btnm, 1);
 
-    lv_calendar_set_showed_date(obj, calendar->showed_date.year, calendar->showed_date.month);
-    lv_calendar_set_today_date(obj, calendar->today.year, calendar->today.month, calendar->today.day);
+    lv_obj_set_style_text_align(calendar->btnm, LV_TEXT_ALIGN_CENTER, LV_PART_MAIN);
+
+    lv_calendar_set_month_shown(obj, 2024, 1);
+    lv_calendar_set_today_date(obj, 2024, 1, 1);
 }
 
 static void draw_task_added_event_cb(lv_event_t * e)
@@ -341,7 +418,7 @@ static uint8_t get_month_length(int32_t year, int32_t month)
 {
     month--;
     if(month < 0) {
-        year--;             /*Already in the previous year (won't be less then -12 to skip a whole year)*/
+        year--;             /*Already in the previous year (won't be less than -12 to skip a whole year)*/
         month = 12 + month; /*`month` is negative, the result will be < 12*/
     }
     if(month >= 12) {
@@ -407,5 +484,50 @@ static void highlight_update(lv_obj_t * obj)
         lv_buttonmatrix_set_button_ctrl(calendar->btnm, calendar->today.day - 1 + day_first + 7, LV_CALENDAR_CTRL_TODAY);
     }
 }
+
+#if LV_USE_CALENDAR_CHINESE
+
+static lv_calendar_date_t gregorian_get_last_month_time(lv_calendar_date_t * time)
+{
+    lv_calendar_date_t last_month_time;
+    if(time->month == 1) {
+        last_month_time.month = 12;
+        last_month_time.year = time->year - 1;
+    }
+    else {
+        last_month_time.month = time->month - 1;
+        last_month_time.year = time->year;
+    }
+    return last_month_time;
+}
+
+static lv_calendar_date_t gregorian_get_next_month_time(lv_calendar_date_t * time)
+{
+    lv_calendar_date_t next_month_time;
+    if(time->month == 12) {
+        next_month_time.month = 1;
+        next_month_time.year = time->year + 1;
+    }
+    else {
+        next_month_time.month = time->month + 1;
+        next_month_time.year = time->year;
+    }
+    return next_month_time;
+}
+
+static void chinese_calendar_set_day_name(lv_obj_t * obj, uint8_t index, uint8_t day,
+                                          lv_calendar_date_t * gregorian_time)
+{
+    lv_calendar_t * calendar = (lv_calendar_t *)obj;
+    const char * day_name = lv_calendar_get_day_name(gregorian_time);
+    if(day_name != NULL)
+        lv_snprintf(calendar->nums[index], sizeof(calendar->nums[0]),
+                    "%d\n%s",
+                    day,
+                    day_name);
+    else
+        lv_snprintf(calendar->nums[index], sizeof(calendar->nums[0]), "%d", day);
+}
+#endif
 
 #endif  /*LV_USE_CALENDAR*/

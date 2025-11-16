@@ -1,5 +1,5 @@
 /**
- * @file lv_win.h
+ * @file lv_list.h
  *
  */
 
@@ -16,6 +16,10 @@ extern "C" {
 #include "../../core/lv_obj.h"
 
 #if LV_USE_LIST
+
+#if LV_USE_FLEX == 0
+#error "lv_list: lv_flex is required. Enable it in lv_conf.h (LV_USE_FLEX 1)"
+#endif
 
 /*********************
  *      DEFINES
@@ -69,7 +73,6 @@ const char * lv_list_get_button_text(lv_obj_t * list, lv_obj_t * btn);
  * @param list      pointer to a list
  * @param btn       pointer to the button
  * @param txt       pointer to the text
- * @return          text of btn, if btn doesn't have text "" will be returned
  */
 void lv_list_set_button_text(lv_obj_t * list, lv_obj_t * btn, const char * txt);
 

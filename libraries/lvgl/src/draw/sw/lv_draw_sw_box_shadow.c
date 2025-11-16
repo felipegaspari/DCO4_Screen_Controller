@@ -6,12 +6,15 @@
 /*********************
  *      INCLUDES
  *********************/
+#include "../../misc/lv_area_private.h"
+#include "lv_draw_sw_mask_private.h"
+#include "../lv_draw_private.h"
 #include "lv_draw_sw.h"
 #if LV_USE_DRAW_SW
 
 #if LV_DRAW_SW_COMPLEX
 
-#include "blend/lv_draw_sw_blend.h"
+#include "blend/lv_draw_sw_blend_private.h"
 #include "../../core/lv_global.h"
 #include "../../misc/lv_math.h"
 #include "../../core/lv_refr.h"
@@ -52,7 +55,7 @@ static void /* LV_ATTRIBUTE_FAST_MEM */ shadow_blur_corner(int32_t size, int32_t
  *   GLOBAL FUNCTIONS
  **********************/
 
-void lv_draw_sw_box_shadow(lv_draw_unit_t * draw_unit, const lv_draw_box_shadow_dsc_t * dsc, const lv_area_t * coords)
+void lv_draw_sw_box_shadow(lv_draw_task_t * t, const lv_draw_box_shadow_dsc_t * dsc, const lv_area_t * coords)
 {
     /*Calculate the rectangle which is blurred to get the shadow in `shadow_area`*/
     lv_area_t core_area;
@@ -74,7 +77,7 @@ void lv_draw_sw_box_shadow(lv_draw_unit_t * draw_unit, const lv_draw_box_shadow_
     /*Get clipped draw area which is the real draw area.
      *It is always the same or inside `shadow_area`*/
     lv_area_t draw_area;
-    if(!_lv_area_intersect(&draw_area, &shadow_area, draw_unit->clip_area)) return;
+    if(!lv_area_intersect(&draw_area, &shadow_area, &t->clip_area)) return;
 
     /*Consider 1 px smaller bg to be sure the edge will be covered by the shadow*/
     lv_area_t bg_area;
@@ -101,11 +104,13 @@ void lv_draw_sw_box_shadow(lv_draw_unit_t * draw_unit, const lv_draw_box_shadow_
     if(cache->cache_size == corner_size && cache->cache_r == r_sh) {
         /*Use the cache if available*/
         sh_buf = lv_malloc(corner_size * corner_size);
+        LV_ASSERT_MALLOC(sh_buf);
         lv_memcpy(sh_buf, cache->cache, corner_size * corner_size);
     }
     else {
         /*A larger buffer is required for calculation*/
         sh_buf = lv_malloc(corner_size * corner_size * sizeof(uint16_t));
+        LV_ASSERT_MALLOC(sh_buf);
         shadow_draw_corner_buf(&core_area, (uint16_t *)sh_buf, dsc->width, r_sh);
 
         /*Cache the corner if it fits into the cache size*/
@@ -117,6 +122,7 @@ void lv_draw_sw_box_shadow(lv_draw_unit_t * draw_unit, const lv_draw_box_shadow_
     }
 #else
     sh_buf = lv_malloc(corner_size * corner_size * sizeof(uint16_t));
+    LV_ASSERT_MALLOC(sh_buf);
     shadow_draw_corner_buf(&core_area, (uint16_t *)sh_buf, dsc->width, r_sh);
 #endif /*LV_DRAW_SW_SHADOW_CACHE_SIZE*/
 
@@ -161,15 +167,15 @@ void lv_draw_sw_box_shadow(lv_draw_unit_t * draw_unit, const lv_draw_box_shadow_
     blend_area.x1 = LV_MAX(blend_area.x1, w_half);
     blend_area.y2 = LV_MIN(blend_area.y2, h_half);
 
-    if(_lv_area_intersect(&clip_area_sub, &blend_area, draw_unit->clip_area) &&
-       !_lv_area_is_in(&clip_area_sub, &bg_area, r_bg)) {
+    if(lv_area_intersect(&clip_area_sub, &blend_area, &t->clip_area) &&
+       !lv_area_is_in(&clip_area_sub, &bg_area, r_bg)) {
         int32_t w = lv_area_get_width(&clip_area_sub);
         sh_buf_tmp = sh_buf;
         sh_buf_tmp += (clip_area_sub.y1 - shadow_area.y1) * corner_size;
         sh_buf_tmp += clip_area_sub.x1 - (shadow_area.x2 - corner_size + 1);
 
         /*Do not mask if out of the bg*/
-        if(simple && _lv_area_is_out(&clip_area_sub, &bg_area, r_bg)) simple_sub = true;
+        if(simple && lv_area_is_out(&clip_area_sub, &bg_area, r_bg)) simple_sub = true;
         else simple_sub = simple;
         if(w > 0) {
             blend_dsc.mask_buf = mask_buf;
@@ -188,7 +194,7 @@ void lv_draw_sw_box_shadow(lv_draw_unit_t * draw_unit, const lv_draw_box_shadow_
                 else {
                     blend_dsc.mask_buf = sh_buf_tmp;
                 }
-                lv_draw_sw_blend(draw_unit, &blend_dsc);
+                lv_draw_sw_blend(t, &blend_dsc);
                 sh_buf_tmp += corner_size;
             }
         }
@@ -204,14 +210,14 @@ void lv_draw_sw_box_shadow(lv_draw_unit_t * draw_unit, const lv_draw_box_shadow_
     blend_area.x1 = LV_MAX(blend_area.x1, w_half);
     blend_area.y1 = LV_MAX(blend_area.y1, h_half + 1);
 
-    if(_lv_area_intersect(&clip_area_sub, &blend_area, draw_unit->clip_area) &&
-       !_lv_area_is_in(&clip_area_sub, &bg_area, r_bg)) {
+    if(lv_area_intersect(&clip_area_sub, &blend_area, &t->clip_area) &&
+       !lv_area_is_in(&clip_area_sub, &bg_area, r_bg)) {
         int32_t w = lv_area_get_width(&clip_area_sub);
         sh_buf_tmp = sh_buf;
         sh_buf_tmp += (blend_area.y2 - clip_area_sub.y2) * corner_size;
         sh_buf_tmp += clip_area_sub.x1 - (shadow_area.x2 - corner_size + 1);
         /*Do not mask if out of the bg*/
-        if(simple && _lv_area_is_out(&clip_area_sub, &bg_area, r_bg)) simple_sub = true;
+        if(simple && lv_area_is_out(&clip_area_sub, &bg_area, r_bg)) simple_sub = true;
         else simple_sub = simple;
 
         if(w > 0) {
@@ -231,7 +237,7 @@ void lv_draw_sw_box_shadow(lv_draw_unit_t * draw_unit, const lv_draw_box_shadow_
                 else {
                     blend_dsc.mask_buf = sh_buf_tmp;
                 }
-                lv_draw_sw_blend(draw_unit, &blend_dsc);
+                lv_draw_sw_blend(t, &blend_dsc);
                 sh_buf_tmp += corner_size;
             }
         }
@@ -244,14 +250,14 @@ void lv_draw_sw_box_shadow(lv_draw_unit_t * draw_unit, const lv_draw_box_shadow_
     blend_area.y2 = shadow_area.y1 + corner_size - 1;
     blend_area.y2 = LV_MIN(blend_area.y2, h_half);
 
-    if(_lv_area_intersect(&clip_area_sub, &blend_area, draw_unit->clip_area) &&
-       !_lv_area_is_in(&clip_area_sub, &bg_area, r_bg)) {
+    if(lv_area_intersect(&clip_area_sub, &blend_area, &t->clip_area) &&
+       !lv_area_is_in(&clip_area_sub, &bg_area, r_bg)) {
         int32_t w = lv_area_get_width(&clip_area_sub);
         sh_buf_tmp = sh_buf;
         sh_buf_tmp += (clip_area_sub.y1 - blend_area.y1) * corner_size;
 
         /*Do not mask if out of the bg*/
-        if(simple && _lv_area_is_out(&clip_area_sub, &bg_area, r_bg)) simple_sub = true;
+        if(simple && lv_area_is_out(&clip_area_sub, &bg_area, r_bg)) simple_sub = true;
         else simple_sub = simple;
 
         if(w > 0) {
@@ -272,11 +278,11 @@ void lv_draw_sw_box_shadow(lv_draw_unit_t * draw_unit, const lv_draw_box_shadow_
                     lv_memset(mask_buf, sh_buf_tmp[0], w);
                     blend_dsc.mask_res = lv_draw_sw_mask_apply(masks, mask_buf, clip_area_sub.x1, y, w);
                     if(blend_dsc.mask_res == LV_DRAW_SW_MASK_RES_FULL_COVER) blend_dsc.mask_res = LV_DRAW_SW_MASK_RES_CHANGED;
-                    lv_draw_sw_blend(draw_unit, &blend_dsc);
+                    lv_draw_sw_blend(t, &blend_dsc);
                 }
                 else {
                     blend_dsc.opa = opa == LV_OPA_COVER ? sh_buf_tmp[0] : LV_OPA_MIX2(sh_buf_tmp[0], dsc->opa);
-                    lv_draw_sw_blend(draw_unit, &blend_dsc);
+                    lv_draw_sw_blend(t, &blend_dsc);
                 }
                 sh_buf_tmp += corner_size;
             }
@@ -291,14 +297,14 @@ void lv_draw_sw_box_shadow(lv_draw_unit_t * draw_unit, const lv_draw_box_shadow_
     blend_area.y2 = shadow_area.y2;
     blend_area.y1 = LV_MAX(blend_area.y1, h_half + 1);
 
-    if(_lv_area_intersect(&clip_area_sub, &blend_area, draw_unit->clip_area) &&
-       !_lv_area_is_in(&clip_area_sub, &bg_area, r_bg)) {
+    if(lv_area_intersect(&clip_area_sub, &blend_area, &t->clip_area) &&
+       !lv_area_is_in(&clip_area_sub, &bg_area, r_bg)) {
         int32_t w = lv_area_get_width(&clip_area_sub);
         sh_buf_tmp = sh_buf;
         sh_buf_tmp += (blend_area.y2 - clip_area_sub.y2) * corner_size;
         if(w > 0) {
             /*Do not mask if out of the bg*/
-            if(simple && _lv_area_is_out(&clip_area_sub, &bg_area, r_bg)) simple_sub = true;
+            if(simple && lv_area_is_out(&clip_area_sub, &bg_area, r_bg)) simple_sub = true;
             else simple_sub = simple;
 
             if(!simple_sub) {
@@ -315,18 +321,18 @@ void lv_draw_sw_box_shadow(lv_draw_unit_t * draw_unit, const lv_draw_box_shadow_
                 blend_area.y2 = y;
 
                 /*Do not mask if out of the bg*/
-                if(simple && _lv_area_is_out(&clip_area_sub, &bg_area, r_bg)) simple_sub = true;
+                if(simple && lv_area_is_out(&clip_area_sub, &bg_area, r_bg)) simple_sub = true;
                 else simple_sub = simple;
 
                 if(!simple_sub) {
                     lv_memset(mask_buf, sh_buf_tmp[0], w);
                     blend_dsc.mask_res = lv_draw_sw_mask_apply(masks, mask_buf, clip_area_sub.x1, y, w);
                     if(blend_dsc.mask_res == LV_DRAW_SW_MASK_RES_FULL_COVER) blend_dsc.mask_res = LV_DRAW_SW_MASK_RES_CHANGED;
-                    lv_draw_sw_blend(draw_unit, &blend_dsc);
+                    lv_draw_sw_blend(t, &blend_dsc);
                 }
                 else {
                     blend_dsc.opa = opa == LV_OPA_COVER ? sh_buf_tmp[0] : (sh_buf_tmp[0] * dsc->opa) >> 8;
-                    lv_draw_sw_blend(draw_unit, &blend_dsc);
+                    lv_draw_sw_blend(t, &blend_dsc);
 
                 }
                 sh_buf_tmp += corner_size;
@@ -346,15 +352,15 @@ void lv_draw_sw_box_shadow(lv_draw_unit_t * draw_unit, const lv_draw_box_shadow_
     blend_area.y2 = LV_MAX(blend_area.y2, h_half);
     blend_area.x1 = LV_MAX(blend_area.x1, w_half);
 
-    if(_lv_area_intersect(&clip_area_sub, &blend_area, draw_unit->clip_area) &&
-       !_lv_area_is_in(&clip_area_sub, &bg_area, r_bg)) {
+    if(lv_area_intersect(&clip_area_sub, &blend_area, &t->clip_area) &&
+       !lv_area_is_in(&clip_area_sub, &bg_area, r_bg)) {
         int32_t w = lv_area_get_width(&clip_area_sub);
         sh_buf_tmp = sh_buf;
         sh_buf_tmp += (corner_size - 1) * corner_size;
         sh_buf_tmp += clip_area_sub.x1 - (shadow_area.x2 - corner_size + 1);
 
         /*Do not mask if out of the bg*/
-        if(simple && _lv_area_is_out(&clip_area_sub, &bg_area, r_bg)) simple_sub = true;
+        if(simple && lv_area_is_out(&clip_area_sub, &bg_area, r_bg)) simple_sub = true;
         else simple_sub = simple;
         blend_dsc.mask_buf = simple_sub ? sh_buf_tmp : mask_buf;
 
@@ -371,7 +377,7 @@ void lv_draw_sw_box_shadow(lv_draw_unit_t * draw_unit, const lv_draw_box_shadow_
                     blend_dsc.mask_res = lv_draw_sw_mask_apply(masks, mask_buf, clip_area_sub.x1, y, w);
                     if(blend_dsc.mask_res == LV_DRAW_SW_MASK_RES_FULL_COVER) blend_dsc.mask_res = LV_DRAW_SW_MASK_RES_CHANGED;
                 }
-                lv_draw_sw_blend(draw_unit, &blend_dsc);
+                lv_draw_sw_blend(t, &blend_dsc);
             }
         }
     }
@@ -403,15 +409,15 @@ void lv_draw_sw_box_shadow(lv_draw_unit_t * draw_unit, const lv_draw_box_shadow_
     blend_area.y2 = LV_MAX(blend_area.y2, h_half);
     blend_area.x2 = LV_MIN(blend_area.x2, w_half - 1);
 
-    if(_lv_area_intersect(&clip_area_sub, &blend_area, draw_unit->clip_area) &&
-       !_lv_area_is_in(&clip_area_sub, &bg_area, r_bg)) {
+    if(lv_area_intersect(&clip_area_sub, &blend_area, &t->clip_area) &&
+       !lv_area_is_in(&clip_area_sub, &bg_area, r_bg)) {
         int32_t w = lv_area_get_width(&clip_area_sub);
         sh_buf_tmp = sh_buf;
         sh_buf_tmp += (corner_size - 1) * corner_size;
         sh_buf_tmp += clip_area_sub.x1 - blend_area.x1;
 
         /*Do not mask if out of the bg*/
-        if(simple && _lv_area_is_out(&clip_area_sub, &bg_area, r_bg)) simple_sub = true;
+        if(simple && lv_area_is_out(&clip_area_sub, &bg_area, r_bg)) simple_sub = true;
         else simple_sub = simple;
         blend_dsc.mask_buf = simple_sub ? sh_buf_tmp : mask_buf;
         if(w > 0) {
@@ -428,7 +434,7 @@ void lv_draw_sw_box_shadow(lv_draw_unit_t * draw_unit, const lv_draw_box_shadow_
                     if(blend_dsc.mask_res == LV_DRAW_SW_MASK_RES_FULL_COVER) blend_dsc.mask_res = LV_DRAW_SW_MASK_RES_CHANGED;
                 }
 
-                lv_draw_sw_blend(draw_unit, &blend_dsc);
+                lv_draw_sw_blend(t, &blend_dsc);
             }
         }
     }
@@ -442,15 +448,15 @@ void lv_draw_sw_box_shadow(lv_draw_unit_t * draw_unit, const lv_draw_box_shadow_
     blend_area.x2 = LV_MIN(blend_area.x2, w_half - 1);
     blend_area.y2 = LV_MIN(blend_area.y2, h_half);
 
-    if(_lv_area_intersect(&clip_area_sub, &blend_area, draw_unit->clip_area) &&
-       !_lv_area_is_in(&clip_area_sub, &bg_area, r_bg)) {
+    if(lv_area_intersect(&clip_area_sub, &blend_area, &t->clip_area) &&
+       !lv_area_is_in(&clip_area_sub, &bg_area, r_bg)) {
         int32_t w = lv_area_get_width(&clip_area_sub);
         sh_buf_tmp = sh_buf;
         sh_buf_tmp += (clip_area_sub.y1 - blend_area.y1) * corner_size;
         sh_buf_tmp += clip_area_sub.x1 - blend_area.x1;
 
         /*Do not mask if out of the bg*/
-        if(simple && _lv_area_is_out(&clip_area_sub, &bg_area, r_bg)) simple_sub = true;
+        if(simple && lv_area_is_out(&clip_area_sub, &bg_area, r_bg)) simple_sub = true;
         else simple_sub = simple;
         blend_dsc.mask_buf = mask_buf;
 
@@ -471,7 +477,7 @@ void lv_draw_sw_box_shadow(lv_draw_unit_t * draw_unit, const lv_draw_box_shadow_
                     blend_dsc.mask_buf = sh_buf_tmp;
                 }
 
-                lv_draw_sw_blend(draw_unit, &blend_dsc);
+                lv_draw_sw_blend(t, &blend_dsc);
                 sh_buf_tmp += corner_size;
             }
         }
@@ -487,15 +493,15 @@ void lv_draw_sw_box_shadow(lv_draw_unit_t * draw_unit, const lv_draw_box_shadow_
     blend_area.y1 = LV_MAX(blend_area.y1, h_half + 1);
     blend_area.x2 = LV_MIN(blend_area.x2, w_half - 1);
 
-    if(_lv_area_intersect(&clip_area_sub, &blend_area, draw_unit->clip_area) &&
-       !_lv_area_is_in(&clip_area_sub, &bg_area, r_bg)) {
+    if(lv_area_intersect(&clip_area_sub, &blend_area, &t->clip_area) &&
+       !lv_area_is_in(&clip_area_sub, &bg_area, r_bg)) {
         int32_t w = lv_area_get_width(&clip_area_sub);
         sh_buf_tmp = sh_buf;
         sh_buf_tmp += (blend_area.y2 - clip_area_sub.y2) * corner_size;
         sh_buf_tmp += clip_area_sub.x1 - blend_area.x1;
 
         /*Do not mask if out of the bg*/
-        if(simple && _lv_area_is_out(&clip_area_sub, &bg_area, r_bg)) simple_sub = true;
+        if(simple && lv_area_is_out(&clip_area_sub, &bg_area, r_bg)) simple_sub = true;
         else simple_sub = simple;
         blend_dsc.mask_buf = mask_buf;
         if(w > 0) {
@@ -514,7 +520,7 @@ void lv_draw_sw_box_shadow(lv_draw_unit_t * draw_unit, const lv_draw_box_shadow_
                 else {
                     blend_dsc.mask_buf = sh_buf_tmp;
                 }
-                lv_draw_sw_blend(draw_unit, &blend_dsc);
+                lv_draw_sw_blend(t, &blend_dsc);
                 sh_buf_tmp += corner_size;
             }
         }
@@ -529,8 +535,8 @@ void lv_draw_sw_box_shadow(lv_draw_unit_t * draw_unit, const lv_draw_box_shadow_
     blend_area.y2 = LV_MAX(blend_area.y2, h_half);
     blend_dsc.mask_buf = mask_buf;
 
-    if(_lv_area_intersect(&clip_area_sub, &blend_area, draw_unit->clip_area) &&
-       !_lv_area_is_in(&clip_area_sub, &bg_area, r_bg)) {
+    if(lv_area_intersect(&clip_area_sub, &blend_area, &t->clip_area) &&
+       !lv_area_is_in(&clip_area_sub, &bg_area, r_bg)) {
         int32_t w = lv_area_get_width(&clip_area_sub);
         if(w > 0) {
             blend_area.x1 = clip_area_sub.x1;
@@ -541,7 +547,7 @@ void lv_draw_sw_box_shadow(lv_draw_unit_t * draw_unit, const lv_draw_box_shadow_
 
                 lv_memset(mask_buf, 0xff, w);
                 blend_dsc.mask_res = lv_draw_sw_mask_apply(masks, mask_buf, clip_area_sub.x1, y, w);
-                lv_draw_sw_blend(draw_unit, &blend_dsc);
+                lv_draw_sw_blend(t, &blend_dsc);
             }
         }
     }
@@ -582,7 +588,7 @@ static void LV_ATTRIBUTE_FAST_MEM shadow_draw_corner_buf(const lv_area_t * coord
     lv_draw_sw_mask_radius_init(&mask_param, &sh_area, r, false);
 
 #if SHADOW_ENHANCE
-    /*Set half shadow width width because blur will be repeated*/
+    /*Set half shadow width because blur will be repeated*/
     if(sw_ori == 1) sw = 1;
     else sw = sw_ori >> 1;
 #endif /*SHADOW_ENHANCE*/
@@ -726,9 +732,9 @@ static void LV_ATTRIBUTE_FAST_MEM shadow_blur_corner(int32_t size, int32_t sw, u
 
 #else /*LV_DRAW_SW_COMPLEX*/
 
-void lv_draw_sw_box_shadow(lv_draw_unit_t * draw_unit, const lv_draw_box_shadow_dsc_t * dsc, const lv_area_t * coords)
+void lv_draw_sw_box_shadow(lv_draw_task_t * t, const lv_draw_box_shadow_dsc_t * dsc, const lv_area_t * coords)
 {
-    LV_UNUSED(draw_unit);
+    LV_UNUSED(t);
     LV_UNUSED(dsc);
     LV_UNUSED(coords);
 

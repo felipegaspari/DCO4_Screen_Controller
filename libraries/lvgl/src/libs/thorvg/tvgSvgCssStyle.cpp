@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022 - 2023 the ThorVG project. All rights reserved.
+ * Copyright (c) 2022 - 2024 the ThorVG project. All rights reserved.
 
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -52,6 +52,22 @@ static void _copyStyle(SvgStyleProperty* to, const SvgStyleProperty* from)
             to->flagsImportance = (to->flagsImportance | SvgStyleFlags::Color);
         }
     }
+    if (((from->flags & SvgStyleFlags::PaintOrder) && !(to->flags & SvgStyleFlags::PaintOrder)) ||
+        _isImportanceApplicable(to->flagsImportance, from->flagsImportance, SvgStyleFlags::PaintOrder)) {
+        to->paintOrder = from->paintOrder;
+        to->flags = (to->flags | SvgStyleFlags::PaintOrder);
+        if (from->flagsImportance & SvgStyleFlags::PaintOrder) {
+            to->flagsImportance = (to->flagsImportance | SvgStyleFlags::PaintOrder);
+        }
+    }
+    if (((from->flags & SvgStyleFlags::Display) && !(to->flags & SvgStyleFlags::Display)) ||
+        _isImportanceApplicable(to->flagsImportance, from->flagsImportance, SvgStyleFlags::Display)) {
+        to->display = from->display;
+        to->flags = (to->flags | SvgStyleFlags::Display);
+        if (from->flagsImportance & SvgStyleFlags::Display) {
+            to->flagsImportance = (to->flagsImportance | SvgStyleFlags::Display);
+        }
+    }
     //Fill
     if (((from->fill.flags & SvgFillFlags::Paint) && !(to->flags & SvgStyleFlags::Fill)) ||
         _isImportanceApplicable(to->flagsImportance, from->flagsImportance, SvgStyleFlags::Fill)) {
@@ -59,8 +75,8 @@ static void _copyStyle(SvgStyleProperty* to, const SvgStyleProperty* from)
         to->fill.paint.none = from->fill.paint.none;
         to->fill.paint.curColor = from->fill.paint.curColor;
         if (from->fill.paint.url) {
-            if (to->fill.paint.url) free(to->fill.paint.url);
-            to->fill.paint.url = strdup(from->fill.paint.url);
+            if (to->fill.paint.url) lv_free(to->fill.paint.url);
+            to->fill.paint.url = lv_strdup(from->fill.paint.url);
         }
         to->fill.flags = (to->fill.flags | SvgFillFlags::Paint);
         to->flags = (to->flags | SvgStyleFlags::Fill);
@@ -93,8 +109,8 @@ static void _copyStyle(SvgStyleProperty* to, const SvgStyleProperty* from)
         to->stroke.paint.none = from->stroke.paint.none;
         to->stroke.paint.curColor = from->stroke.paint.curColor;
         if (from->stroke.paint.url) {
-            if (to->stroke.paint.url) free(to->stroke.paint.url);
-            to->stroke.paint.url = strdup(from->stroke.paint.url);
+            if (to->stroke.paint.url) lv_free(to->stroke.paint.url);
+            to->stroke.paint.url = lv_strdup(from->stroke.paint.url);
         }
         to->stroke.flags = (to->stroke.flags | SvgStrokeFlags::Paint);
         to->flags = (to->flags | SvgStyleFlags::Stroke);
@@ -174,7 +190,8 @@ void cssCopyStyleAttr(SvgNode* to, const SvgNode* from)
 {
     //Copy matrix attribute
     if (from->transform && !(to->style->flags & SvgStyleFlags::Transform)) {
-        to->transform = (Matrix*)malloc(sizeof(Matrix));
+        to->transform = (Matrix*)lv_malloc(sizeof(Matrix));
+        LV_ASSERT_MALLOC(to->transform);
         if (to->transform) {
             *to->transform = *from->transform;
             to->style->flags = (to->style->flags | SvgStyleFlags::Transform);
@@ -184,12 +201,12 @@ void cssCopyStyleAttr(SvgNode* to, const SvgNode* from)
     _copyStyle(to->style, from->style);
 
     if (from->style->clipPath.url) {
-        if (to->style->clipPath.url) free(to->style->clipPath.url);
-        to->style->clipPath.url = strdup(from->style->clipPath.url);
+        if (to->style->clipPath.url) lv_free(to->style->clipPath.url);
+        to->style->clipPath.url = lv_strdup(from->style->clipPath.url);
     }
     if (from->style->mask.url) {
-        if (to->style->mask.url) free(to->style->mask.url);
-        to->style->mask.url = strdup(from->style->mask.url);
+        if (to->style->mask.url) lv_free(to->style->mask.url);
+        to->style->mask.url = lv_strdup(from->style->mask.url);
     }
 }
 

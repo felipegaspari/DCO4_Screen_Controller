@@ -6,7 +6,11 @@
 /*********************
  *      INCLUDES
  *********************/
-#include "lv_arc.h"
+#include "lv_arc_private.h"
+#include "../../misc/lv_area_private.h"
+#include "../../core/lv_obj_private.h"
+#include "../../core/lv_obj_event_private.h"
+#include "../../core/lv_obj_class_private.h"
 #if LV_USE_ARC != 0
 
 #include "../../core/lv_group.h"
@@ -14,6 +18,7 @@
 #include "../../misc/lv_assert.h"
 #include "../../misc/lv_math.h"
 #include "../../draw/lv_draw_arc.h"
+#include "../../others/observer/lv_observer_private.h"
 
 /*********************
  *      DEFINES
@@ -46,6 +51,10 @@ static void value_update(lv_obj_t * arc);
 static int32_t knob_get_extra_size(lv_obj_t * obj);
 static bool lv_arc_angle_within_bg_bounds(lv_obj_t * obj, const lv_value_precise_t angle,
                                           const lv_value_precise_t tolerance_deg);
+#if LV_USE_OBSERVER
+    static void arc_value_changed_event_cb(lv_event_t * e);
+    static void arc_value_observer_cb(lv_observer_t * observer, lv_subject_t * subject);
+#endif /*LV_USE_OBSERVER*/
 
 /**********************
  *  STATIC VARIABLES
@@ -56,7 +65,7 @@ const lv_obj_class_t lv_arc_class  = {
     .instance_size = sizeof(lv_arc_t),
     .editable = LV_OBJ_CLASS_EDITABLE_TRUE,
     .base_class = &lv_obj_class,
-    .name = "arc",
+    .name = "lv_arc",
 };
 
 /**********************
@@ -195,6 +204,9 @@ void lv_arc_set_rotation(lv_obj_t * obj, int32_t rotation)
     LV_ASSERT_OBJ(obj, MY_CLASS);
     lv_arc_t * arc = (lv_arc_t *)obj;
 
+    /* ensure the angle is in the range [0, 360) */
+    while(rotation < 0) rotation += 360;
+    while(rotation >= 360) rotation -= 360;
     arc->rotation = rotation;
 
     lv_obj_invalidate(obj);
@@ -264,6 +276,16 @@ void lv_arc_set_range(lv_obj_t * obj, int32_t min, int32_t max)
     }
 
     value_update(obj); /*value has changed relative to the new range*/
+}
+
+void lv_arc_set_min_value(lv_obj_t * obj, int32_t min)
+{
+    lv_arc_set_range(obj, min, lv_arc_get_max_value(obj));
+}
+
+void lv_arc_set_max_value(lv_obj_t * obj, int32_t max)
+{
+    lv_arc_set_range(obj, lv_arc_get_min_value(obj), max);
 }
 
 void lv_arc_set_change_rate(lv_obj_t * obj, uint32_t rate)
@@ -350,6 +372,25 @@ int32_t lv_arc_get_knob_offset(const lv_obj_t * obj)
  * Other functions
  *====================*/
 
+#if LV_USE_OBSERVER
+lv_observer_t * lv_arc_bind_value(lv_obj_t * obj, lv_subject_t * subject)
+{
+    LV_ASSERT_NULL(subject);
+    LV_ASSERT_NULL(obj);
+
+    if(subject->type != LV_SUBJECT_TYPE_INT && subject->type != LV_SUBJECT_TYPE_FLOAT) {
+        LV_LOG_WARN("Incompatible subject type: %d", subject->type);
+        return NULL;
+    }
+
+    lv_obj_add_event_cb(obj, arc_value_changed_event_cb, LV_EVENT_VALUE_CHANGED, subject);
+
+    lv_observer_t * observer = lv_subject_add_observer_obj(subject, arc_value_observer_cb, obj, NULL);
+    return observer;
+}
+#endif /*LV_USE_OBSERVER*/
+
+
 void lv_arc_align_obj_to_angle(const lv_obj_t * obj, lv_obj_t * obj_to_align, int32_t r_offset)
 {
     LV_ASSERT_OBJ(obj, MY_CLASS);
@@ -417,7 +458,7 @@ static void lv_arc_constructor(const lv_obj_class_t * class_p, lv_obj_t * obj)
     arc->indic_angle_end   = 270;
     arc->type = LV_ARC_MODE_NORMAL;
     arc->value = VALUE_UNSET;
-    arc->min_close = 1;
+    arc->min_close = CLICK_CLOSER_TO_MIN_END;
     arc->min_value = 0;
     arc->max_value = 100;
     arc->dragging = false;
@@ -502,11 +543,14 @@ static void lv_arc_event(const lv_obj_class_t * class_p, lv_event_t * e)
         angle -= arc->rotation;
         angle -= arc->bg_angle_start;  /*Make the angle relative to the start angle*/
 
-        /* If we click near the bg_angle_start the angle will be close to 360° instead of a small angle */
-        if(angle < 0) angle += 360;
+
+        /* ensure the angle is in the range [0, 360) */
+        while(angle < 0) angle += 360;
+        while(angle >= 360) angle -= 360;
+
 
         const uint32_t circumference = (uint32_t)((2U * r * 314U) / 100U);  /* Equivalent to: 2r * 3.14, avoiding floats */
-        const lv_value_precise_t tolerance_deg = (360 * lv_dpx(50U)) / circumference;
+        const lv_value_precise_t tolerance_deg = (360 * lv_dpx(20U)) / circumference;
         const uint32_t min_close_prev = (uint32_t) arc->min_close;
 
         const bool is_angle_within_bg_bounds = lv_arc_angle_within_bg_bounds(obj, angle, tolerance_deg);
@@ -522,12 +566,12 @@ static void lv_arc_event(const lv_obj_class_t * class_p, lv_event_t * e)
          *It's mainly to avoid jumping to the opposite end if the "dead" range between min. and max. is crossed.
          *Check which end was closer on the last valid press (arc->min_close) and prefer that end*/
         if(LV_ABS(delta_angle) > 280) {
-            if(arc->min_close) angle = 0;
+            if(arc->min_close == CLICK_CLOSER_TO_MIN_END) angle = 0;
             else angle = deg_range;
         }
         /* Check if click was outside the background arc start and end angles */
         else if(CLICK_OUTSIDE_BG_ANGLES == arc->in_out) {
-            if(arc->min_close) angle = -deg_range;
+            if(arc->min_close == CLICK_CLOSER_TO_MIN_END) angle = -deg_range;
             else angle = deg_range;
         }
         else { /* Keep the angle value */ }
@@ -537,10 +581,12 @@ static void lv_arc_event(const lv_obj_class_t * class_p, lv_event_t * e)
         if(((min_close_prev == CLICK_CLOSER_TO_MIN_END) && (arc->min_close == CLICK_CLOSER_TO_MAX_END))
            && ((CLICK_OUTSIDE_BG_ANGLES == arc->in_out) && (LV_ABS(delta_angle) > 280))) {
             angle = 0;
+            arc->min_close = min_close_prev;
         }
         else if(((min_close_prev == CLICK_CLOSER_TO_MAX_END) && (arc->min_close == CLICK_CLOSER_TO_MIN_END))
-                && (CLICK_OUTSIDE_BG_ANGLES == arc->in_out)) {
+                && (CLICK_OUTSIDE_BG_ANGLES == arc->in_out) && (360 - LV_ABS(delta_angle) > 280)) {
             angle = deg_range;
+            arc->min_close = min_close_prev;
         }
         else { /* Keep the angle value */ }
 
@@ -644,14 +690,33 @@ static void lv_arc_event(const lv_obj_class_t * class_p, lv_event_t * e)
         lv_area_t a;
         /*Invalid if clicked inside*/
         lv_area_set(&a, p.x - r, p.y - r, p.x + r, p.y + r);
-        if(_lv_area_is_point_on(&a, info->point, LV_RADIUS_CIRCLE)) {
+        if(lv_area_is_point_on(&a, info->point, LV_RADIUS_CIRCLE)) {
+            info->res = false;
+            return;
+        }
+
+        /*Calculate the angle of the pressed point*/
+        lv_value_precise_t angle = lv_atan2(info->point->y - p.y, info->point->x - p.x);
+        angle -= arc->rotation;
+        angle -= arc->bg_angle_start;  /*Make the angle relative to the start angle*/
+
+        /* ensure the angle is in the range [0, 360) */
+        while(angle < 0) angle += 360;
+        while(angle >= 360) angle -= 360;
+
+        const uint32_t circumference = (uint32_t)((2U * r * 314U) / 100U);  /* Equivalent to: 2r * 3.14, avoiding floats */
+        const lv_value_precise_t tolerance_deg = (360 * lv_dpx(20U)) / circumference;
+
+        /* Check if the angle is outside the drawn background arc */
+        const bool is_angle_within_bg_bounds = lv_arc_angle_within_bg_bounds(obj, angle, tolerance_deg);
+        if(!is_angle_within_bg_bounds) {
             info->res = false;
             return;
         }
 
         /*Valid if no clicked outside*/
         lv_area_increase(&a, w + ext_click_area * 2, w + ext_click_area * 2);
-        info->res = _lv_area_is_point_on(&a, info->point, LV_RADIUS_CIRCLE);
+        info->res = lv_area_is_point_on(&a, info->point, LV_RADIUS_CIRCLE);
     }
     else if(code == LV_EVENT_REFR_EXT_DRAW_SIZE) {
         int32_t bg_left = lv_obj_get_style_pad_left(obj, LV_PART_MAIN);
@@ -692,6 +757,7 @@ static void lv_arc_draw(lv_event_t * e)
     lv_draw_arc_dsc_t arc_dsc;
     if(arc_r > 0) {
         lv_draw_arc_dsc_init(&arc_dsc);
+        arc_dsc.base.layer = layer;
         lv_obj_init_draw_arc_dsc(obj, LV_PART_MAIN, &arc_dsc);
         arc_dsc.center = center;
         arc_dsc.start_angle = arc->bg_angle_start + arc->rotation;
@@ -709,6 +775,7 @@ static void lv_arc_draw(lv_event_t * e)
 
     if(indic_r > 0) {
         lv_draw_arc_dsc_init(&arc_dsc);
+        arc_dsc.base.layer = layer;
         lv_obj_init_draw_arc_dsc(obj, LV_PART_INDICATOR, &arc_dsc);
         arc_dsc.center = center;
         arc_dsc.start_angle = arc->indic_angle_start + arc->rotation;
@@ -724,6 +791,7 @@ static void lv_arc_draw(lv_event_t * e)
 
     lv_draw_rect_dsc_t knob_rect_dsc;
     lv_draw_rect_dsc_init(&knob_rect_dsc);
+    knob_rect_dsc.base.layer = layer;
     lv_obj_init_draw_rect_dsc(obj, LV_PART_KNOB, &knob_rect_dsc);
     lv_draw_rect(layer, &knob_rect_dsc, &knob_area);
 }
@@ -923,7 +991,7 @@ static int32_t knob_get_extra_size(lv_obj_t * obj)
  * and we click a bit to the left, angle is 10, not the expected 40.
  *
  * @param obj   Pointer to lv_arc
- * @param angle Angle to be checked
+ * @param angle Angle to be checked. Is 0<=angle<=360 and relative to bg_angle_start
  * @param tolerance_deg Tolerance
  *
  * @return true if angle is within arc background bounds, false otherwise
@@ -934,94 +1002,83 @@ static bool lv_arc_angle_within_bg_bounds(lv_obj_t * obj, const lv_value_precise
     LV_ASSERT_OBJ(obj, MY_CLASS);
     lv_arc_t * arc = (lv_arc_t *)obj;
 
-    lv_value_precise_t smaller_angle = 0;
-    lv_value_precise_t bigger_angle = 0;
+    lv_value_precise_t bounds_angle = arc->bg_angle_end - arc->bg_angle_start;
+    if(arc->bg_angle_end == arc->bg_angle_start) return false; /*The arc has 0 deg span*/
 
-    /* Determine which background angle is smaller and bigger */
-    if(arc->bg_angle_start < arc->bg_angle_end) {
-        bigger_angle = arc->bg_angle_end;
-        smaller_angle = arc->bg_angle_start;
-    }
-    else {
-        bigger_angle = (360 - arc->bg_angle_start) + arc->bg_angle_end;
-        smaller_angle = 0;
-    }
+    /* ensure the angle is in the range [0, 360) */
+    while(bounds_angle < 0) bounds_angle += 360;
+    while(bounds_angle >= 360) bounds_angle -= 360;
 
-    /* Angle is between both background angles */
-    if((smaller_angle <= angle) && (angle <= bigger_angle)) {
+    /*Full circle*/
+    if(bounds_angle == 0) bounds_angle = 360;
 
-        if(((bigger_angle - smaller_angle) / 2) >= angle) {
-            arc->min_close = 1;
+    /* Angle is in the bounds */
+    if(angle <= bounds_angle) {
+        if(angle < (bounds_angle / 2)) {
+            arc->min_close = CLICK_CLOSER_TO_MIN_END;
         }
         else {
-            arc->min_close = 0;
+            arc->min_close = CLICK_CLOSER_TO_MAX_END;
         }
-
         arc->in_out = CLICK_INSIDE_BG_ANGLES;
-
         return true;
     }
+
     /* Distance between background start and end angles is less than tolerance,
      * consider the click inside the arc */
-    else if(((smaller_angle - tolerance_deg) <= 0) &&
-            (360 - (bigger_angle + (smaller_angle - tolerance_deg))) != 0) {
-
-        arc->min_close = 1;
+    if(360 - bounds_angle <= tolerance_deg) {
+        arc->min_close = CLICK_CLOSER_TO_MIN_END;
         arc->in_out = CLICK_INSIDE_BG_ANGLES;
         return true;
     }
-    else { /* Case handled below */ }
 
-    /* Legends:
-     * 0° = angle 0
-     * 360° = angle 360
-     * T: Tolerance
-     * A: Angle
-     * S: Arc background start angle
-     * E: Arc background end angle
-     *
-     * Start angle is bigger or equal to tolerance */
-    if((smaller_angle >= tolerance_deg)
-       /* (360° - T) --- A --- 360° */
-       && ((angle >= (360 - tolerance_deg)) && (angle <= 360))) {
-
-        arc->min_close = 1;
+    /* angle is within the tolerance of the min end */
+    if(360 - angle <= tolerance_deg) {
+        arc->min_close = CLICK_CLOSER_TO_MIN_END;
         arc->in_out = CLICK_OUTSIDE_BG_ANGLES;
         return true;
     }
-    /* Tolerance is bigger than bg start angle */
-    else if((smaller_angle < tolerance_deg)
-            /* (360° - (T - S)) --- A --- 360° */
-            && (((360 - (tolerance_deg - smaller_angle)) <= angle)) && (angle <= 360)) {
 
-        arc->min_close = 1;
+    /* angle is within the tolerance of the max end */
+    if(angle <= bounds_angle + tolerance_deg) {
+        arc->min_close = CLICK_CLOSER_TO_MAX_END;
         arc->in_out = CLICK_OUTSIDE_BG_ANGLES;
         return true;
-    }
-    /* 360° is bigger than background end angle + tolerance */
-    else if((360 >= (bigger_angle + tolerance_deg))
-            /* E --- A --- (E + T) */
-            && ((bigger_angle <= (angle + smaller_angle)) &&
-                ((angle + smaller_angle) <= (bigger_angle + tolerance_deg)))) {
-
-        arc->min_close = 0;
-        arc->in_out = CLICK_OUTSIDE_BG_ANGLES;
-        return true;
-    }
-    /* Background end angle + tolerance is bigger than 360° and bg_start_angle + tolerance is not near 0° + ((bg_end_angle + tolerance) - 360°)
-     * Here we can assume background is not near 0° because of the first two initial checks */
-    else if((360 < (bigger_angle + tolerance_deg))
-            && (angle <= 0 + ((bigger_angle + tolerance_deg) - 360)) && (angle > bigger_angle)) {
-
-        arc->min_close = 0;
-        arc->in_out = CLICK_OUTSIDE_BG_ANGLES;
-        return true;
-    }
-    else {
-        /* Nothing to do */
     }
 
     return false;
 }
+
+#if LV_USE_OBSERVER
+
+static void arc_value_changed_event_cb(lv_event_t * e)
+{
+    lv_obj_t * arc = lv_event_get_current_target(e);
+    lv_subject_t * subject = lv_event_get_user_data(e);
+
+    if(subject->type == LV_SUBJECT_TYPE_INT) {
+        lv_subject_set_int(subject, lv_arc_get_value(arc));
+    }
+#if LV_USE_FLOAT
+    else {
+        lv_subject_set_float(subject, (float)lv_arc_get_value(arc));
+    }
+#endif
+}
+
+static void arc_value_observer_cb(lv_observer_t * observer, lv_subject_t * subject)
+{
+    if(subject->type == LV_SUBJECT_TYPE_INT) {
+        lv_arc_set_value(observer->target, subject->value.num);
+    }
+#if LV_USE_FLOAT
+    else {
+        lv_arc_set_value(observer->target, (int32_t)subject->value.float_v);
+    }
+#endif
+}
+
+#endif /*LV_USE_OBSERVER*/
+
 
 #endif

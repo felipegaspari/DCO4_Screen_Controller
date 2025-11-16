@@ -13,8 +13,8 @@ extern "C" {
  *      INCLUDES
  *********************/
 #include "../../lv_conf_internal.h"
-#include "../../widgets/image/lv_image.h"
 #if LV_USE_FFMPEG != 0
+#include "../../misc/lv_types.h"
 
 /*********************
  *      DEFINES
@@ -27,20 +27,12 @@ struct ffmpeg_context_s;
 
 LV_ATTRIBUTE_EXTERN_DATA extern const lv_obj_class_t lv_ffmpeg_player_class;
 
-typedef struct {
-    lv_image_t img;
-    lv_timer_t * timer;
-    lv_image_dsc_t imgdsc;
-    bool auto_restart;
-    struct ffmpeg_context_s * ffmpeg_ctx;
-} lv_ffmpeg_player_t;
-
 typedef enum {
     LV_FFMPEG_PLAYER_CMD_START,
     LV_FFMPEG_PLAYER_CMD_STOP,
     LV_FFMPEG_PLAYER_CMD_PAUSE,
     LV_FFMPEG_PLAYER_CMD_RESUME,
-    _LV_FFMPEG_PLAYER_CMD_LAST
+    LV_FFMPEG_PLAYER_CMD_LAST
 } lv_ffmpeg_player_cmd_t;
 
 /**********************
@@ -51,6 +43,11 @@ typedef enum {
  * Register FFMPEG image decoder
  */
 void lv_ffmpeg_init(void);
+
+/**
+ * De-initialize FFMPEG image decoder
+ */
+void lv_ffmpeg_deinit(void);
 
 /**
  * Get the number of frames contained in the file
@@ -67,7 +64,7 @@ int lv_ffmpeg_get_frame_num(const char * path);
 lv_obj_t * lv_ffmpeg_player_create(lv_obj_t * parent);
 
 /**
- * Set the path of the file to be played
+ * Set the path of the file to be played.
  * @param obj pointer to a ffmpeg_player object
  * @param path video file path
  * @return LV_RESULT_OK: no error; LV_RESULT_INVALID: can't get the info.

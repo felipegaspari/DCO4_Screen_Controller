@@ -15,6 +15,7 @@
 
 #include "lv_draw_pxp.h"
 
+#if LV_USE_PXP
 #if LV_USE_DRAW_PXP
 #include "lv_pxp_cfg.h"
 #include "lv_pxp_utils.h"
@@ -46,13 +47,15 @@ static void _pxp_fill(uint8_t * dest_buf, const lv_area_t * dest_area, int32_t d
  *   GLOBAL FUNCTIONS
  **********************/
 
-void lv_draw_pxp_fill(lv_draw_unit_t * draw_unit, const lv_draw_fill_dsc_t * dsc,
-                      const lv_area_t * coords)
+void lv_draw_pxp_fill(lv_draw_task_t * t)
 {
+    const lv_draw_fill_dsc_t * dsc = t->draw_dsc;
+    const lv_area_t * coords = &t->area;
+
     if(dsc->opa <= (lv_opa_t)LV_OPA_MIN)
         return;
 
-    lv_layer_t * layer = draw_unit->target_layer;
+    lv_layer_t * layer = t->target_layer;
     lv_draw_buf_t * draw_buf = layer->draw_buf;
 
     lv_area_t rel_coords;
@@ -60,11 +63,11 @@ void lv_draw_pxp_fill(lv_draw_unit_t * draw_unit, const lv_draw_fill_dsc_t * dsc
     lv_area_move(&rel_coords, -layer->buf_area.x1, -layer->buf_area.y1);
 
     lv_area_t rel_clip_area;
-    lv_area_copy(&rel_clip_area, draw_unit->clip_area);
+    lv_area_copy(&rel_clip_area, &t->clip_area);
     lv_area_move(&rel_clip_area, -layer->buf_area.x1, -layer->buf_area.y1);
 
     lv_area_t blend_area;
-    if(!_lv_area_intersect(&blend_area, &rel_coords, &rel_clip_area))
+    if(!lv_area_intersect(&blend_area, &rel_coords, &rel_clip_area))
         return; /*Fully clipped, nothing to do*/
 
     _pxp_fill(draw_buf->data, &blend_area, draw_buf->header.stride, draw_buf->header.cf, dsc);
@@ -145,3 +148,4 @@ static void _pxp_fill(uint8_t * dest_buf, const lv_area_t * dest_area, int32_t d
 }
 
 #endif /*LV_USE_DRAW_PXP*/
+#endif /*LV_USE_PXP*/

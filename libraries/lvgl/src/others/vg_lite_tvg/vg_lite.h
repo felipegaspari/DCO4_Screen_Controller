@@ -32,9 +32,16 @@
 extern "C" {
 #endif
 
+/**
+ * causes MSVC error C1189.
+ * Not needed because "The __inline keyword is equivalent to inline."
+ * See: https://learn.microsoft.com/en-us/cpp/cpp/inline-functions-cpp?view=msvc-170
+*/
+/*
 #if defined(_MSC_VER)
 #define inline __inline
 #endif
+*/
 
 #include <stddef.h>
 #include <stdint.h>
@@ -161,7 +168,7 @@ typedef unsigned int        vg_lite_color_t;
         VG_LITE_SUCCESS = 0,            /*! Success. */
         VG_LITE_INVALID_ARGUMENT,       /*! An invalid argument was specified. */
         VG_LITE_OUT_OF_MEMORY,          /*! Out of memory. */
-        VG_LITE_NO_CONTEXT,             /*! No context or an unintialized context specified. */
+        VG_LITE_NO_CONTEXT,             /*! No context or an uninitialized context specified. */
         VG_LITE_TIMEOUT,                /*! A timeout has occurred during a wait. */
         VG_LITE_OUT_OF_RESOURCES,       /*! Out of system resources. */
         VG_LITE_GENERIC_IO,             /*! Cannot communicate with the kernel driver. */
@@ -567,7 +574,7 @@ typedef unsigned int        vg_lite_color_t;
     typedef enum vg_lite_index_endian
     {
         VG_LITE_INDEX_LITTLE_ENDIAN,            /*! Parse the index pixel from low to high,
-                                                 *! when using index1, the parsing order is bit0~bit7. 
+                                                 *! when using index1, the parsing order is bit0~bit7.
                                                  *! when using index2, the parsing order is bit0:1,bit2:3,bit4:5.bit6:7.
                                                  *! when using index4, the parsing order is bit0:3,bit4:7.
                                                  */
@@ -810,7 +817,7 @@ typedef unsigned int        vg_lite_color_t;
         vg_lite_paint_type_t paintType;         /*! Get paintcolor from different paint types. */
         vg_lite_uint8_t fc_enable;              /*! enable im fastclear. */
         vg_lite_uint8_t scissor_layer;          /*! The buffer is scissor buffer. */
-        vg_lite_uint8_t premultiplied;          /*! The RGB pixel values are alpha-premultipled */
+        vg_lite_uint8_t premultiplied;          /*! The RGB pixel values are alpha-premultiplied */
     } vg_lite_buffer_t;
 
     /* Memory allocation info by kernel. */
@@ -919,14 +926,14 @@ typedef unsigned int        vg_lite_color_t;
     /* Colorkey definition */
     typedef struct vg_lite_color_key
     {
-        vg_lite_uint8_t enable;                 /*! The color key is effective only when "enable" is ture, */
-        vg_lite_uint8_t low_r;                  /*! The R chanel of low_rgb. */
-        vg_lite_uint8_t low_g;                  /*! The G chanel of low_rgb. */
-        vg_lite_uint8_t low_b;                  /*! The B chanel of low_rgb. */
+        vg_lite_uint8_t enable;                 /*! The color key is effective only when "enable" is true, */
+        vg_lite_uint8_t low_r;                  /*! The R channel of low_rgb. */
+        vg_lite_uint8_t low_g;                  /*! The G channel of low_rgb. */
+        vg_lite_uint8_t low_b;                  /*! The B channel of low_rgb. */
         vg_lite_uint8_t alpha;                  /*! The alpha channel to replace destination pixel alpha channel.*/
-        vg_lite_uint8_t hign_r;                 /*! The R chanel of hign_rgb. */
-        vg_lite_uint8_t hign_g;                 /*! The G chanel of hign_rgb. */
-        vg_lite_uint8_t hign_b;                 /*! The B chanel of hign_rgb. */
+        vg_lite_uint8_t hign_r;                 /*! The R channel of hign_rgb. */
+        vg_lite_uint8_t hign_g;                 /*! The G channel of hign_rgb. */
+        vg_lite_uint8_t hign_b;                 /*! The B channel of hign_rgb. */
     } vg_lite_color_key_t;
 
     /* Four colorkey definition.
@@ -989,7 +996,7 @@ typedef unsigned int        vg_lite_color_t;
     /* Get the value of register from register's address. */
     vg_lite_error_t vg_lite_get_register(vg_lite_uint32_t address, vg_lite_uint32_t* result);
 
-    /* Generate a 3x3 homogenous matrix to transform 4 source coordinates to 4 target coordinates. */
+    /* Generate a 3x3 homogeneous matrix to transform 4 source coordinates to 4 target coordinates. */
     vg_lite_error_t vg_lite_get_transform_matrix(vg_lite_point4_t src, vg_lite_point4_t dst, vg_lite_matrix_t *mat);
 
     /* Allocate a buffer from GPU hardware accessible memory. */
@@ -1274,7 +1281,7 @@ typedef unsigned int        vg_lite_color_t;
 
     /* Setup 3x3 gaussian blur weight values to filter image pixels.
      *
-     *  Paramters w0, w1, w2 define a 3x3 gaussian blur weight matrix as below
+     *  Parameters w0, w1, w2 define a 3x3 gaussian blur weight matrix as below
      *
      *                  |  w2   w1   w2 |
      *                  |  w1   w0   w1 |

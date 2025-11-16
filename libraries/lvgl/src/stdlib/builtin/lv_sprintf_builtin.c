@@ -36,6 +36,7 @@
 #if LV_USE_STDLIB_SPRINTF == LV_STDLIB_BUILTIN
 
 #include "../lv_sprintf.h"
+#include "../lv_string.h"
 #include "../../misc/lv_types.h"
 
 #define PRINTF_DISABLE_SUPPORT_FLOAT    (!LV_USE_FLOAT)
@@ -141,15 +142,6 @@ static inline void _out_null(char character, void * buffer, size_t idx, size_t m
     LV_UNUSED(buffer);
     LV_UNUSED(idx);
     LV_UNUSED(maxlen);
-}
-
-// internal secure strlen
-// \return The length of the string (excluding the terminating 0) limited by 'maxsize'
-static inline unsigned int _strnlen_s(const char * str, size_t maxsize)
-{
-    const char * s;
-    for(s = str; *s && maxsize--; ++s);
-    return (unsigned int)(s - str);
 }
 
 // internal test if char is a digit (0-9)
@@ -552,7 +544,7 @@ static size_t _etoa(out_fct_type out, char * buffer, size_t idx, size_t maxlen, 
 #endif  // PRINTF_SUPPORT_FLOAT
 
 // internal vsnprintf
-static int _lv_vsnprintf(out_fct_type out, char * buffer, const size_t maxlen, const char * format, va_list va)
+static int lv_vsnprintf_inner(out_fct_type out, char * buffer, const size_t maxlen, const char * format, va_list va)
 {
     unsigned int flags, width, precision, n;
     size_t idx = 0U;
@@ -759,7 +751,7 @@ static int _lv_vsnprintf(out_fct_type out, char * buffer, const size_t maxlen, c
                         va_list copy;
 
                         va_copy(copy, *vaf->va);
-                        idx += _lv_vsnprintf(out, buffer + idx, maxlen - idx, vaf->fmt, copy);
+                        idx += lv_vsnprintf_inner(out, buffer + idx, maxlen - idx, vaf->fmt, copy);
                         va_end(copy);
                     }
                     else {
@@ -822,7 +814,7 @@ static int _lv_vsnprintf(out_fct_type out, char * buffer, const size_t maxlen, c
 
             case 's' : {
                     const char * p = va_arg(va, char *);
-                    unsigned int l = _strnlen_s(p, precision ? precision : (size_t) -1);
+                    unsigned int l = lv_strnlen(p, precision ? precision : (size_t) -1);
                     // pre padding
                     if(flags & FLAGS_PRECISION) {
                         l = (l < precision ? l : precision);
@@ -873,14 +865,14 @@ int lv_snprintf(char * buffer, size_t count, const char * format, ...)
 {
     va_list va;
     va_start(va, format);
-    const int ret = _lv_vsnprintf(_out_buffer, buffer, count, format, va);
+    const int ret = lv_vsnprintf_inner(_out_buffer, buffer, count, format, va);
     va_end(va);
     return ret;
 }
 
 int lv_vsnprintf(char * buffer, size_t count, const char * format, va_list va)
 {
-    return _lv_vsnprintf(_out_buffer, buffer, count, format, va);
+    return lv_vsnprintf_inner(_out_buffer, buffer, count, format, va);
 }
 
 #endif /*LV_STDLIB_BUILTIN*/

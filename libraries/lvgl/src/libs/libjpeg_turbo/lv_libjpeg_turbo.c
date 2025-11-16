@@ -6,6 +6,7 @@
 /*********************
  *      INCLUDES
  *********************/
+#include "../../draw/lv_image_decoder_private.h"
 #include "../../../lvgl.h"
 #if LV_USE_LIBJPEG_TURBO
 
@@ -14,10 +15,16 @@
 #include <jpeglib.h>
 #include <jpegint.h>
 #include <setjmp.h>
+#include "../../core/lv_global.h"
 
 /*********************
  *      DEFINES
  *********************/
+
+#define DECODER_NAME    "JPEG_TURBO"
+
+#define image_cache_draw_buf_handlers &(LV_GLOBAL_DEFAULT()->image_cache_draw_buf_handlers)
+
 #define JPEG_PIXEL_SIZE 3 /* RGB888 */
 #define JPEG_SIGNATURE 0xFFD8FF
 #define IS_JPEG_SIGNATURE(x) (((x) & 0x00FFFFFF) == JPEG_SIGNATURE)
@@ -33,7 +40,7 @@ typedef struct error_mgr_s {
 /**********************
  *  STATIC PROTOTYPES
  **********************/
-static lv_result_t decoder_info(lv_image_decoder_t * decoder, const void * src, lv_image_header_t * header);
+static lv_result_t decoder_info(lv_image_decoder_t * decoder, lv_image_decoder_dsc_t * dsc, lv_image_header_t * header);
 static lv_result_t decoder_open(lv_image_decoder_t * decoder, lv_image_decoder_dsc_t * dsc);
 static void decoder_close(lv_image_decoder_t * decoder, lv_image_decoder_dsc_t * dsc);
 static lv_draw_buf_t * decode_jpeg_file(const char * filename);
@@ -41,7 +48,8 @@ static uint8_t * read_file(const char * filename, uint32_t * size);
 static bool get_jpeg_head_info(const char * filename, uint32_t * width, uint32_t * height, uint32_t * orientation);
 static bool get_jpeg_size(uint8_t * data, uint32_t data_size, uint32_t * width, uint32_t * height);
 static bool get_jpeg_direction(uint8_t * data, uint32_t data_size, uint32_t * orientation);
-static void rotate_buffer(lv_draw_buf_t * decoded, uint8_t * buffer, uint32_t line_index, uint32_t angle);
+static void rotate_buffer(lv_draw_buf_t * decoded, uint8_t * buffer, uint32_t line_index, uint32_t angle,
+                          uint32_t row_stride);
 static void error_exit(j_common_ptr cinfo);
 /**********************
  *  STATIC VARIABLES
@@ -72,7 +80,8 @@ void lv_libjpeg_turbo_init(void)
     lv_image_decoder_set_info_cb(dec, decoder_info);
     lv_image_decoder_set_open_cb(dec, decoder_open);
     lv_image_decoder_set_close_cb(dec, decoder_close);
-    lv_image_decoder_set_cache_free_cb(dec, NULL); /*Use general cache free method*/
+
+    dec->name = DECODER_NAME;
 }
 
 void lv_libjpeg_turbo_deinit(void)
@@ -92,42 +101,34 @@ void lv_libjpeg_turbo_deinit(void)
 
 /**
  * Get info about a JPEG image
- * @param src can be file name or pointer to a C array
+ * @param dsc image descriptor containing the source and type of the image and other info.
  * @param header store the info here
  * @return LV_RESULT_OK: no error; LV_RESULT_INVALID: can't get the info
  */
-static lv_result_t decoder_info(lv_image_decoder_t * decoder, const void * src, lv_image_header_t * header)
+static lv_result_t decoder_info(lv_image_decoder_t * decoder, lv_image_decoder_dsc_t * dsc, lv_image_header_t * header)
 {
     LV_UNUSED(decoder); /*Unused*/
-    lv_image_src_t src_type = lv_image_src_get_type(src);          /*Get the source type*/
+    lv_image_src_t src_type = dsc->src_type;          /*Get the source type*/
 
     /*If it's a JPEG file...*/
     if(src_type == LV_IMAGE_SRC_FILE) {
-        const char * fn = src;
-
-        lv_fs_file_t f;
-        lv_fs_res_t res = lv_fs_open(&f, fn, LV_FS_MODE_RD);
-        if(res != LV_FS_RES_OK) {
-            LV_LOG_WARN("Can't open file: %s", fn);
-            return LV_RESULT_INVALID;
-        }
-
+        const char * src = dsc->src;
         uint32_t jpg_signature = 0;
         uint32_t rn;
-        lv_fs_read(&f, &jpg_signature, sizeof(jpg_signature), &rn);
-        lv_fs_close(&f);
+        lv_fs_read(&dsc->file, &jpg_signature, sizeof(jpg_signature), &rn);
 
         if(rn != sizeof(jpg_signature)) {
-            LV_LOG_WARN("file: %s signature len = %" LV_PRIu32 " error", fn, rn);
+            LV_LOG_WARN("file: %s signature len = %" LV_PRIu32 " error", src, rn);
             return LV_RESULT_INVALID;
         }
 
-        bool is_jpeg_ext = (lv_strcmp(lv_fs_get_ext(fn), "jpg") == 0)
-                           || (lv_strcmp(lv_fs_get_ext(fn), "jpeg") == 0);
+        const char * ext = lv_fs_get_ext(src);
+        bool is_jpeg_ext = (lv_strcmp(ext, "jpg") == 0)
+                           || (lv_strcmp(ext, "jpeg") == 0);
 
         if(!IS_JPEG_SIGNATURE(jpg_signature)) {
             if(is_jpeg_ext) {
-                LV_LOG_WARN("file: %s signature = 0X%" LV_PRIX32 " error", fn, jpg_signature);
+                LV_LOG_WARN("file: %s signature = 0X%" LV_PRIX32 " error", src, jpg_signature);
             }
             return LV_RESULT_INVALID;
         }
@@ -136,7 +137,7 @@ static lv_result_t decoder_info(lv_image_decoder_t * decoder, const void * src, 
         uint32_t height;
         uint32_t orientation = 0;
 
-        if(!get_jpeg_head_info(fn, &width, &height, &orientation)) {
+        if(!get_jpeg_head_info(src, &width, &height, &orientation)) {
             return LV_RESULT_INVALID;
         }
 
@@ -172,9 +173,12 @@ static lv_result_t decoder_open(lv_image_decoder_t * decoder, lv_image_decoder_d
 
         dsc->decoded = decoded;
 
-        if(dsc->args.no_cache) return LV_RES_OK;
+        if(dsc->args.no_cache) return LV_RESULT_OK;
 
-#if LV_CACHE_DEF_SIZE > 0
+        /*If the image cache is disabled, just return the decoded image*/
+        if(!lv_image_cache_is_enabled()) return LV_RESULT_OK;
+
+        /*Add the decoded image to the cache*/
         lv_image_cache_data_t search_key;
         search_key.src_type = dsc->src_type;
         search_key.src = dsc->src;
@@ -187,7 +191,6 @@ static lv_result_t decoder_open(lv_image_decoder_t * decoder, lv_image_decoder_d
             return LV_RESULT_INVALID;
         }
         dsc->cache_entry = entry;
-#endif
         return LV_RESULT_OK;    /*If not returned earlier then it failed*/
     }
 
@@ -201,10 +204,8 @@ static void decoder_close(lv_image_decoder_t * decoder, lv_image_decoder_dsc_t *
 {
     LV_UNUSED(decoder); /*Unused*/
 
-    if(dsc->args.no_cache || LV_CACHE_DEF_SIZE == 0)
-        lv_draw_buf_destroy((lv_draw_buf_t *)dsc->decoded);
-    else
-        lv_cache_release(dsc->cache, dsc->cache_entry, NULL);
+    if(dsc->args.no_cache ||
+       !lv_image_cache_is_enabled()) lv_draw_buf_destroy((lv_draw_buf_t *)dsc->decoded);
 }
 
 static uint8_t * read_file(const char * filename, uint32_t * size)
@@ -277,7 +278,7 @@ static lv_draw_buf_t * decode_jpeg_file(const char * filename)
     /* More stuff */
     JSAMPARRAY buffer;  /* Output row buffer */
 
-    int row_stride;     /* physical row width in output buffer */
+    uint32_t row_stride;     /* physical row width in output buffer */
     uint32_t image_angle = 0;   /* image rotate angle */
 
     lv_draw_buf_t * decoded = NULL;
@@ -368,7 +369,8 @@ static lv_draw_buf_t * decode_jpeg_file(const char * filename)
              ((j_common_ptr) &cinfo, JPOOL_IMAGE, row_stride, 1);
     uint32_t buf_width = (image_angle % 180) ? cinfo.output_height : cinfo.output_width;
     uint32_t buf_height = (image_angle % 180) ? cinfo.output_width : cinfo.output_height;
-    decoded = lv_draw_buf_create(buf_width, buf_height, LV_COLOR_FORMAT_RGB888, LV_STRIDE_AUTO);
+    decoded = lv_draw_buf_create_ex(image_cache_draw_buf_handlers, buf_width, buf_height, LV_COLOR_FORMAT_RGB888,
+                                    LV_STRIDE_AUTO);
     if(decoded != NULL) {
         uint32_t line_index = 0;
         /* while (scan lines remain to be read) */
@@ -385,7 +387,7 @@ static lv_draw_buf_t * decode_jpeg_file(const char * filename)
             jpeg_read_scanlines(&cinfo, buffer, 1);
 
             /* Assume put_scanline_someplace wants a pointer and sample count. */
-            rotate_buffer(decoded, buffer[0], line_index, image_angle);
+            rotate_buffer(decoded, buffer[0], line_index, image_angle, row_stride);
 
             line_index++;
         }
@@ -562,7 +564,8 @@ static bool get_jpeg_direction(uint8_t * data, uint32_t data_size, uint32_t * or
     return JPEG_HEADER_OK;
 }
 
-static void rotate_buffer(lv_draw_buf_t * decoded, uint8_t * buffer, uint32_t line_index, uint32_t angle)
+static void rotate_buffer(lv_draw_buf_t * decoded, uint8_t * buffer, uint32_t line_index, uint32_t angle,
+                          uint32_t row_stride)
 {
     if(angle == 90) {
         for(uint32_t x = 0; x < decoded->header.h; x++) {
@@ -583,7 +586,7 @@ static void rotate_buffer(lv_draw_buf_t * decoded, uint8_t * buffer, uint32_t li
         }
     }
     else {
-        lv_memcpy(decoded->data + line_index * decoded->header.stride, buffer, decoded->header.stride);
+        lv_memcpy(decoded->data + line_index * decoded->header.stride, buffer, row_stride);
     }
 }
 

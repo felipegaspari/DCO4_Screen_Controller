@@ -1,5 +1,5 @@
 /**
- * @file lv_draw_img.h
+ * @file lv_draw_image.h
  *
  */
 
@@ -26,55 +26,89 @@ extern "C" {
  *      MACROS
  **********************/
 
-/**********************
- *      TYPEDEFS
- **********************/
-
-typedef struct {
-    lv_color_t alpha_color;
-    const lv_color32_t * palette;
-    uint32_t palette_size   : 9;
-} lv_draw_image_sup_t;
-
-typedef struct _lv_draw_image_dsc_t {
+struct _lv_draw_image_dsc_t {
     lv_draw_dsc_base_t base;
 
+    /**The image source: pointer to `lv_image_dsc_t` or a path to a file*/
     const void * src;
+
+    /**The header of the image. Initialized internally in `lv_draw_image` */
     lv_image_header_t header;
 
+    /**Clip the corner of the image with this radius. Use `LV_RADIUS_CIRCLE` for max. radius */
+    int32_t clip_radius;
+
+    /**The rotation of the image in 0.1 degree unit. E.g. 234 means 23.4° */
     int32_t rotation;
+
+    /**Horizontal scale (zoom) of the image.
+     * 256 (LV_SCALE_NONE): means no zoom, 512 double size, 128 half size.*/
     int32_t scale_x;
+
+    /**Same as `scale_y` but vertically*/
     int32_t scale_y;
+
+    /**Parallelogram like transformation of the image horizontally in 0.1 degree unit. E.g. 456 means 45.6°.*/
     int32_t skew_x;
+
+    /**Same as `skew_x` but vertically*/
     int32_t skew_y;
+
+    /**The pivot point of transformation (scale and rotation).
+     * 0;0 is the top left corner of the image. Can be outside of the image too.*/
     lv_point_t pivot;
 
+    /**Mix this color to the images. In case of `LV_COLOR_FORMAT_A8` it will be the color of the visible pixels*/
     lv_color_t recolor;
+
+    /**The intensity of recoloring. 0 means, no recolor, 255 means full cover (transparent pixels remain transparent)*/
     lv_opa_t recolor_opa;
 
+    /**Opacity in 0...255 range.
+     * LV_OPA_TRANSP, LV_OPA_10, LV_OPA_20, .. LV_OPA_COVER can be used as well*/
     lv_opa_t opa;
+
+    /**Describes how to blend the pixels of the image to the background.
+     * See `lv_blend_mode_t` for more details.
+     */
     lv_blend_mode_t blend_mode : 4;
 
+    /**1: perform the transformation with anti-aliasing */
     uint16_t antialias          : 1;
+
+    /**If the image is smaller than the `image_area` field of `lv_draw_image_dsc_t`
+     * tile the image (repeat is both horizontally and vertically) to fill the
+     * `image_area` area*/
     uint16_t tile               : 1;
+
+    const lv_image_colorkey_t * colorkey;
+
+    /**Used internally to store some information about the palette or the color of A8 images*/
     lv_draw_image_sup_t * sup;
 
-    /** Might be used to indicate the original size of the image if only a small portion is rendered now.
-     * Used when a part of a layer is rendered to show the total layer size*/
-    lv_area_t original_area;
+    /** Used to indicate the entire original, non-clipped area where the image is to be drawn.
+     * This is important for:
+     *  1. Layer rendering, where it might happen that only a smaller area of the layer is rendered and e.g.
+     *     `clip_radius` needs to know what the original image was.
+     *  2. Tiled images, where the target draw area is larger than the image to be tiled.
+     */
+    lv_area_t image_area;
+
+    /**Pointer to an A8 or L8 image descriptor to mask the image with.
+     * The mask is always center aligned. */
     const lv_image_dsc_t * bitmap_mask_src;
-} lv_draw_image_dsc_t;
+};
 
 /**
  * PErform the actual rendering of a decoded image
- * @param draw_unit         pointer to a draw unit
+ * @param t                 pointer to a draw task
  * @param draw_dsc          the draw descriptor of the image
  * @param decoder_dsc       pointer to the decoded image's descriptor
  * @param sup               supplementary data
  * @param img_coords        the absolute coordinates of the image
  * @param clipped_img_area  the absolute clip coordinates
  */
-typedef void (*lv_draw_image_core_cb)(lv_draw_unit_t * draw_unit, const lv_draw_image_dsc_t * draw_dsc,
+typedef void (*lv_draw_image_core_cb)(lv_draw_task_t * t, const lv_draw_image_dsc_t * draw_dsc,
                                       const lv_image_decoder_dsc_t * decoder_dsc, lv_draw_image_sup_t * sup,
                                       const lv_area_t * img_coords, const lv_area_t * clipped_img_area);
 
@@ -100,14 +134,19 @@ lv_draw_image_dsc_t * lv_draw_task_get_image_dsc(lv_draw_task_t * task);
  * @param layer         pointer to a layer
  * @param dsc           pointer to an initialized draw descriptor
  * @param coords        the coordinates of the image
+ * @note                `coords` can be small than the real image area
+ *                      (if only a part of the image is rendered)
+ *                      or can be larger (in case of tiled images).   .
  */
 void lv_draw_image(lv_layer_t * layer, const lv_draw_image_dsc_t * dsc, const lv_area_t * coords);
 
 /**
- * Create a draw task to blend a layer to an other layer
+ * Create a draw task to blend a layer to another layer
  * @param layer         pointer to a layer
- * @param dsc           pointer to an initialized draw descriptor
- * @param coords        the coordinates of the layer
+ * @param dsc           pointer to an initialized draw descriptor. `src` must be set to the layer to blend
+ * @param coords        the coordinates of the layer.
+ * @note                `coords` can be small than the total widget area from which the layer is created
+ *                      (if only a part of the widget was rendered to a layer)
  */
 void lv_draw_layer(lv_layer_t * layer, const lv_draw_image_dsc_t * dsc, const lv_area_t * coords);
 
@@ -120,41 +159,6 @@ void lv_draw_layer(lv_layer_t * layer, const lv_draw_image_dsc_t * dsc, const lv
  * @return type of the image source LV_IMAGE_SRC_VARIABLE/FILE/SYMBOL/UNKNOWN
  */
 lv_image_src_t lv_image_src_get_type(const void * src);
-
-/**
- * Can be used by draw units to handle the decoding and
- * prepare everything for the actual image rendering
- * @param draw_unit     pointer to a draw unit
- * @param draw_dsc      the draw descriptor of the image
- * @param coords        the absolute coordinates of the image
- * @param draw_core_cb  a callback to perform the actual rendering
- */
-void _lv_draw_image_normal_helper(lv_draw_unit_t * draw_unit, const lv_draw_image_dsc_t * draw_dsc,
-                                  const lv_area_t * coords, lv_draw_image_core_cb draw_core_cb);
-
-/**
- * Can be used by draw units for TILED images to handle the decoding and
- * prepare everything for the actual image rendering
- * @param draw_unit     pointer to a draw unit
- * @param draw_dsc      the draw descriptor of the image
- * @param coords        the absolute coordinates of the image
- * @param draw_core_cb  a callback to perform the actual rendering
- */
-void _lv_draw_image_tiled_helper(lv_draw_unit_t * draw_unit, const lv_draw_image_dsc_t * draw_dsc,
-                                 const lv_area_t * coords, lv_draw_image_core_cb draw_core_cb);
-
-/**
- * Get the area of a rectangle if its rotated and scaled
- * @param res store the coordinates here
- * @param w width of the rectangle to transform
- * @param h height of the rectangle to transform
- * @param angle angle of rotation
- * @param scale_x zoom in x direction, (256 no zoom)
- * @param scale_y zoom in y direction, (256 no zoom)
- * @param pivot x,y pivot coordinates of rotation
- */
-void _lv_image_buf_get_transformed_area(lv_area_t * res, int32_t w, int32_t h, int32_t angle,
-                                        uint16_t scale_x, uint16_t scale_y, const lv_point_t * pivot);
 
 #ifdef __cplusplus
 } /*extern "C"*/

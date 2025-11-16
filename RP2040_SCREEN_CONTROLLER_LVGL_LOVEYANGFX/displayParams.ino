@@ -80,7 +80,87 @@ void drawManualCalibration() {
   }
 }
 
+// Apply parameter effects to the internal "model" state (levels, calibration,
+// screen signals, etc.). This is kept separate from the user-facing text so
+// setDisplayParam() is easier to reason about.
+static void applyParamToModelAndSignals() {
+  switch (paramNumber) {
+    // Mixer levels -> bar values
+    case 22:
+      OSC1Level   = paramValue;
+      levelBarFlag = 1;
+      break;
+    case 23:
+      OSC2Level   = paramValue;
+      levelBarFlag = 2;
+      break;
+    case 24:
+      SUBLevel    = paramValue;
+      levelBarFlag = 3;
+      break;
+
+    // Calibration flags / screen navigation
+    case 150:  // AUTO CALIBRATION
+      switch (paramValue) {
+        case 0:
+          serialSignal = 2;
+          break;
+        case 1:
+          serialSignal = 7;
+          break;
+      }
+      signalFlag = true;
+      break;
+
+    case 151:  // MANUAL CALIBRATION
+      switch (paramValue) {
+        case 1:
+          serialSignal = 8;
+          break;
+        case 0:
+          serialSignal = 7;
+          break;
+      }
+      signalFlag = true;
+      break;
+
+    case 152:  // manual calibration stage
+      manualCalibrationStage = paramValue;
+      manualCalibrationOSCN  = manualCalibrationStage / 2;
+      break;
+
+    case 153:  // manual calibration offset
+      offset = (int8_t)paramValue;
+      break;
+
+    case 154:  // manual calibration GAP
+      calibrationGap = (int32_t)paramValue;
+      break;
+
+    case 199:  // EXIT CURRENT MENU
+      switch (serialSignal) {
+        case 7:
+          serialSignal = 2;
+          signalFlag   = true;
+          break;
+      }
+      break;
+
+    case 200:  // CALIBRATION MENU
+      serialSignal = 7;
+      signalFlag   = true;
+      break;
+
+    default:
+      // Other parameters only affect display text right now.
+      break;
+  }
+}
+
 void setDisplayParam() {
+  // First update internal model / screen state.
+  applyParamToModelAndSignals();
+
   switch (paramNumber) {
     case 1:
       paramName = " OSC1 SAW";
@@ -221,18 +301,12 @@ void setDisplayParam() {
       break;
     case 22:
       paramName = " OSC1 Level";
-      OSC1Level = paramValue;
-      levelBarFlag = 1;
       break;
     case 23:
       paramName = " OSC2 Level";
-      OSC2Level = paramValue;
-      levelBarFlag = 2;
       break;
     case 24:
       paramName = " SUB Level";
-      SUBLevel = paramValue;
-      levelBarFlag = 3;
       break;
     case 25:
       paramName = " CALIBRATION VAL";
@@ -467,58 +541,27 @@ void setDisplayParam() {
 
     case 150:
       paramName = " AUTO CALIBRATION";
-      switch (paramValue) {
-        case 0:
-          serialSignal = 2;
-          break;
-        case 1:
-          serialSignal = 7;
-          break;
-      }
-      signalFlag = true;
       break;
     case 151:
       paramName = " MANUAL CALIBRATION";
-      switch (paramValue) {
-        case 1:
-          serialSignal = 8;
-          break;
-        case 0:
-          serialSignal = 7;
-          break;
-      }
-      signalFlag = true;
       break;
     case 152:  // manual calibration stage
       paramName = "OSCILLATOR N";
-      manualCalibrationStage = paramValue;
-      manualCalibrationOSCN = manualCalibrationStage / 2;
       break;
     case 153:  // manual calibration offset
       paramName = " OFFSET";
-      offset = (int8_t)paramValue;
       break;
     case 154:  // manual calibration GAP
       paramName = " GAP";
-      calibrationGap = (int32_t)paramValue;
       break;
 
     case 190:  // MENU POSITION
-
       break;
 
-    case 199:  // EXIT CURRENT MENU
-      switch (serialSignal) {
-        case 7:
-          serialSignal = 2;
-          signalFlag = true;
-          break;
-      }
+    case 199:  // EXIT CURRENT MENU (handled in applyParamToModelAndSignals)
       break;
 
-    case 200:  // CALIBRATION MENU
-      serialSignal = 7;
-      signalFlag = true;
+    case 200:  // CALIBRATION MENU (handled in applyParamToModelAndSignals)
       break;
 
     case 210:

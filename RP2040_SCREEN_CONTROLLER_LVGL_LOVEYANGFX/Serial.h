@@ -1,33 +1,35 @@
 #ifndef __SERIAL_H__
 #define __SERIAL_H__
 
+#include "serial_param_protocol.h"
+
 void serial_read_n();
 
-volatile byte presetNumber;
-//byte presetNameBytes[8];
-String presetNameString = "Vacio";
+extern volatile byte    presetNumber;
+extern String           presetNameString;
 
-volatile bool presetScrollFlag = false;
+extern volatile bool    presetScrollFlag;
 
-volatile byte paramNumber;
-volatile int32_t paramValue;
-String paramName;
+extern volatile byte    paramNumber;
+extern volatile int32_t paramValue;
+extern String           paramName;
 
-volatile bool paramChangeFlag = false;
+extern volatile bool    paramChangeFlag;
 
-volatile bool updateADSR1Flag = false;
-volatile bool updateADSR2Flag = false;
+extern volatile bool    updateADSR1Flag;
+extern volatile bool    updateADSR2Flag;
  
-volatile bool signalFlag;
-volatile byte serialSignal = 1;
+extern volatile bool    signalFlag;
+extern volatile byte    serialSignal;
 
-volatile bool presetCharFlag = false;
-volatile byte presetChar = 0;
+extern volatile bool    presetCharFlag;
+extern volatile byte    presetChar;
 
-volatile byte levelBarFlag = true;
+extern volatile byte    levelBarFlag;
 
-volatile char presetNameBytes[12];
-volatile char presetNameBytesOLD[12];
+// +1 for null terminator so LVGL/string APIs see a clean C-string.
+extern volatile char    presetNameBytes[17];     // 16-char names + '\0'
+extern volatile char    presetNameBytesOLD[17];
 #endif
 
 /*

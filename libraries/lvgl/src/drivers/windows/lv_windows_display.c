@@ -122,37 +122,36 @@ static unsigned int __stdcall lv_windows_display_thread_entrypoint(
     LV_ASSERT_NULL(data);
 
     DWORD window_style = WS_OVERLAPPEDWINDOW;
+    DWORD ext_window_style = WS_EX_CLIENTEDGE;
+    RECT rect = { 0, 0, data->hor_res, data->ver_res };
+
     if(data->simulator_mode) {
         window_style &= ~(WS_SIZEBOX | WS_MAXIMIZEBOX | WS_THICKFRAME);
     }
-
-    RECT WindowRectangle = { 0, 0, data->hor_res, data->ver_res }; //added by SquareLine team to accomodate for wished initial client area
-    AdjustWindowRectEx(&WindowRectangle, window_style, FALSE, 0); //(this still gives a bit (about 4 pixels) less area due to cca. 2-pixel resize-borders), see below for further improvement
+    else {
+        /* Have Windows compute window size so, regardless of window style,
+         * the CLIENT AREA has dimensions [data->hor_res, data->ver_res].
+         * This is the area needed for LVGL to render to. */
+        AdjustWindowRectEx(&rect, window_style, false, ext_window_style);
+    }
 
     HWND window_handle = CreateWindowExW(
-                             WS_EX_CLIENTEDGE,
+                             ext_window_style,
                              L"LVGL.Window",
                              data->title,
                              window_style,
                              CW_USEDEFAULT,
                              0,
-                             WindowRectangle.right - WindowRectangle.left,  //data->hor_res,
-                             WindowRectangle.bottom - WindowRectangle.top,  //data->ver_res,
+                             rect.right - rect.left,
+                             rect.bottom - rect.top,
                              NULL,
                              NULL,
                              NULL,
                              data);
+
     if(!window_handle) {
         return 0;
     }
-
-    //Further improvement by SquareLine team: re-checking the window size and re-adjusting for wished client size, now taking thin resize-borders into account
-    RECT ClientRectangle; LONG WidthDifference, HeightDifference;
-    GetClientRect(window_handle, &ClientRectangle); GetWindowRect(window_handle, &WindowRectangle);
-    WidthDifference = (WindowRectangle.right - WindowRectangle.left) - ClientRectangle.right;
-    HeightDifference = (WindowRectangle.bottom - WindowRectangle.top) - ClientRectangle.bottom;
-    MoveWindow( window_handle, WindowRectangle.left, WindowRectangle.top, data->hor_res + WidthDifference, data->ver_res + HeightDifference, TRUE );
-
 
     lv_windows_window_context_t * context = lv_windows_get_window_context(
                                                 window_handle);
