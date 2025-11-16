@@ -1,0 +1,51 @@
+#######################################
+# Syntax Coloring Map For Test
+#######################################
+
+#######################################
+# Datatypes (KEYWORD1)
+#######################################
+SerLoggingLevel	KEYWORD1
+MBedLogger KEYWORD1
+PrintfLogger KEYWORD1
+LoggingPort KEYWORD1
+
+#######################################
+# Methods and Functions (KEYWORD2)
+#######################################
+ioDevicePinMode	KEYWORD2
+write KEYWORD2
+serLevelEnabled KEYWORD2
+serEnableLevel KEYWORD2
+serlogF KEYWORD2
+serlogF2 KEYWORD2
+serlogF3 KEYWORD2
+serlogF4 KEYWORD2
+serlogFHex KEYWORD2
+serlogFHex2 KEYWORD2
+serlog KEYWORD2
+serlog2 KEYWORD2
+serlog3 KEYWORD2
+serlogHex KEYWORD2
+serlogHexDump KEYWORD2
+serdebugF KEYWORD2
+serdebugF2 KEYWORD2
+serdebugF3 KEYWORD2
+serdebugF4 KEYWORD2
+serdebugFHex KEYWORD2
+serdebugFHex2 KEYWORD2
+serdebug KEYWORD2
+serdebug2 KEYWORD2
+serdebug3 KEYWORD2
+serdebugHex KEYWORD2
+startTaskManagerLogDelegate KEYWORD2
+
+#######################################
+# Instances (KEYWORD2)
+#######################################
+
+#######################################
+# Constants (LITERAL1)
+#######################################
+IOLOG_MBED_PORT_IF_NEEDED LITERAL1
+IOLOG_START_SERIAL LITERAL1
