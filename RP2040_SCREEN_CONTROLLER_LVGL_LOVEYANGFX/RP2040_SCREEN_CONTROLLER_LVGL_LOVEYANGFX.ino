@@ -103,6 +103,9 @@ void setup() {
   Serial2.setPollingMode(true);
   Serial2.setFIFOSize(512);
   Serial2.begin(2500000);
+
+  // USBDevice.setManufacturerDescriptor("FELA         ");   /// Why doesnt it work?
+  // USBDevice.setProductDescriptor("DCO4 Screen Controller       ");
 }
 
 
@@ -307,9 +310,10 @@ static void updateCalibrationUI(ScreenMode mode) {
       break;
 
     case ScreenMode::ManualCalibration:
-      if (paramChangeFlag) {
-        drawManualCalibration();
-      }
+      // Always redraw the manual calibration panel so the displayed
+      // oscillator index and offset track the latest state even if a
+      // paramChangeFlag edge is missed or arrives slightly out of order.
+      drawManualCalibration();
       paramChangeFlag = false;
       break;
 

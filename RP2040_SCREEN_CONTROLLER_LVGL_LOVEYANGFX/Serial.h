@@ -2,6 +2,7 @@
 #define __SERIAL_H__
 
 #include "serial_param_protocol.h"
+#include "serial_parser.h"
 
 void serial_read_n();
 

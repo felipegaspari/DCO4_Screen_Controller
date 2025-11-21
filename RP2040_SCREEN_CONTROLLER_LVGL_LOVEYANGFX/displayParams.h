@@ -1,6 +1,8 @@
 #ifndef __DISPLAY_PARAMS_H__
 #define __DISPLAY_PARAMS_H__
 
+#include "params_def.h"
+
 uint16_t paramHideTimeMillis = 3000;
 bool paramChangeTimerFlag = false;
 
