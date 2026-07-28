@@ -1,3 +1,4 @@
+// Apply Input 'y' nav ParamIds (manual cal stage/offset) to display state.
 void updateParameters(byte paramNumberNavigation, int32_t paramValueNavigation) {
   switch (paramNumberNavigation) {
     // MENU / UI navigation actions sent via 'y' from the input controller.

@@ -32,10 +32,12 @@ enum class ScreenMode : uint8_t {
   ManualCalibration = 8   // MANUAL CALIBRATION
 };
 
+// Map serialSignal byte to ScreenMode enum.
 inline ScreenMode getScreenMode() {
   return static_cast<ScreenMode>(serialSignal);
 }
 
+// Write ScreenMode into serialSignal (protocol byte).
 inline void setScreenMode(ScreenMode mode) {
   serialSignal = static_cast<uint8_t>(mode);
 }
@@ -56,7 +58,7 @@ void my_print(const char *buf) {
 }
 #endif
 
-/* Display flushing */
+/* Display flushing: push LVGL dirty area to LovyanGFX, then mark flush ready. */
 void my_disp_flush(lv_display_t *disp, const lv_area_t *area, uint8_t *pixelmap) {
   uint32_t w = (area->x2 - area->x1 + 1);
   uint32_t h = (area->y2 - area->y1 + 1);
@@ -74,11 +76,11 @@ void my_disp_flush(lv_display_t *disp, const lv_area_t *area, uint8_t *pixelmap)
   lv_disp_flush_ready(disp);
 }
 
-/*Read the touchpad*/
+/* Touchpad read — unused (display-only; leaves data untouched). */
 void my_touchpad_read(lv_indev_t *indev_driver, lv_indev_data_t *data) {
 }
 
-/*Set tick routine needed for LVGL internal timings*/
+/* LVGL tick source: Arduino millis(). */
 static uint32_t my_tick_get_cb(void) {
   return millis();
 }
@@ -87,6 +89,7 @@ static uint32_t my_tick_get_cb(void) {
 
 uint32_t paramChangeLastMillis = 0;
 /////////////////////////////////////////////////////////// setup ///////////////////////////////////////////////////
+// Core0 boot: USB debug Serial + UART1 (Input) + UART2 (Mainboard).
 void setup() {
   //SPI.setClockDivider(SPI_CLOCK_DIV2);
 
@@ -109,6 +112,7 @@ void setup() {
 }
 
 
+// Core1 boot: LVGL + LovyanGFX display + SquareLine ui_init.
 void setup1() {
   lv_init();
 
@@ -135,6 +139,7 @@ void setup1() {
 }
 
 /////////////////////////////////////////////////////////// loop ///////////////////////////////////////////////////
+// Core0 hot path: drain Input (Serial1) and Mainboard (Serial2) parsers.
 void loop(void) {
   serial_read_n();
   serial_read_n2();
@@ -146,6 +151,7 @@ void loop(void) {
 
 // --- Helpers for loop1() ---
 
+// On signalFlag: load LVGL screens / show-hide panels for the new ScreenMode.
 static void handleScreenModeChange(ScreenMode mode) {
   if (!signalFlag) {
     return;
@@ -218,6 +224,7 @@ static void handleScreenModeChange(ScreenMode mode) {
     signalFlag = false;
   }
 
+// Modes ≤5: hide timed toasts; update preset scroll / param label / name cursor.
 static void updateBottomMessageAndPresetUI(ScreenMode mode) {
   // Modes 0..5 share the same behavior.
   uint8_t rawSignal = serialSignal;
@@ -248,6 +255,7 @@ static void updateBottomMessageAndPresetUI(ScreenMode mode) {
   }
 }
 
+// Push OSC1/OSC2/SUB level bars when levelBarFlag is set (all three in Silent).
 static void updateLevelBars(ScreenMode mode) {
   if (levelBarFlag == 0) {
     return;
@@ -277,6 +285,7 @@ static void updateLevelBars(ScreenMode mode) {
         levelBarFlag = 0;
       }
 
+// Refresh ADSR1/ADSR2 bar widgets when update flags are set from serial.
 static void updateADSRBars() {
       if (updateADSR1Flag) {
         lv_bar_set_value(ui_ADSR1AttackBar, 0.03125f * ADSR1Attack, LV_ANIM_ON);
@@ -294,6 +303,7 @@ static void updateADSRBars() {
       }
 }
 
+// Calibration menu tabs / manual calibration panel redraw for modes 7–8.
 static void updateCalibrationUI(ScreenMode mode) {
   switch (mode) {
     case ScreenMode::CalibrationMenu:
@@ -323,6 +333,7 @@ static void updateCalibrationUI(ScreenMode mode) {
   }
 }
 
+// Core1 hot path: apply serial-driven UI updates, then LVGL timer handler.
 void loop1(void) {
   millisTimer();
 

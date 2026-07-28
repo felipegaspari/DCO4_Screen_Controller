@@ -18,11 +18,13 @@ static void apply_param_sqr1_level(int32_t v) {
   levelBarFlag = 1;
 }
 
+// OSC2 / SQR2 mixer level → bar 2
 static void apply_param_sqr2_level(int32_t v) {
   OSC2Level    = (uint8_t)v;
   levelBarFlag = 2;
 }
 
+// SUB mixer level → bar 3
 static void apply_param_sub_level(int32_t v) {
   SUBLevel     = (uint8_t)v;
   levelBarFlag = 3;
@@ -105,6 +107,7 @@ static const ScreenParamDescriptor screenParamTable[] = {
 static const size_t screenParamTableSize =
   sizeof(screenParamTable) / sizeof(screenParamTable[0]);
 
+// Show param name/value toast on the bottom message panel.
 void draw_param_1() {
 
   paramChangeLastMillis = millis();
@@ -120,6 +123,7 @@ void draw_param_1() {
   lv_obj_remove_flag(ui_BottomMessagePanel, LV_OBJ_FLAG_HIDDEN);
 }
 
+// Draw preset number/name widgets according to current serialSignal mode.
 void draw_preset_scroll_1() {
 
   char str[3];
@@ -158,6 +162,7 @@ void draw_preset_scroll_1() {
   }
 }
 
+// Refresh manual-calibration labels (offset, OSC index, gap) on the cal panel.
 void drawManualCalibration() {
   char str[3];
   char strLong[8];
@@ -200,6 +205,7 @@ static void applyParamToModelAndSignals() {
   );
 }
 
+// Map paramNumber to label text + apply model side-effects; raises paramChangeFlag.
 void setDisplayParam() {
   // First update internal model / screen state.
   applyParamToModelAndSignals();

@@ -154,6 +154,7 @@ static SerialParserContext screenSerial2Parser = {
   0
 };
 
+// Core0: non-blocking Mainboard Serial2 parser pump.
 void serial_read_n2() {
   // Expire any stale partial frame.
   if (screenSerial2Parser.state == SERIAL_READ_PAYLOAD) {
@@ -356,6 +357,7 @@ static SerialParserContext screenSerial1Parser = {
   0
 };
 
+// Core0: non-blocking Input Serial1 parser pump.
 void serial_read_n() {
   // Expire any stale partial frame.
   if (screenSerial1Parser.state == SERIAL_READ_PAYLOAD) {

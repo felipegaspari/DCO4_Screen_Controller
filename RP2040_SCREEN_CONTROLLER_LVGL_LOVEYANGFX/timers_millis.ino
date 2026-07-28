@@ -1,3 +1,4 @@
+// Soft-timer flags for Core1 loop (most currently unused beyond millisTimer call).
 void millisTimer() {
 
   timer99microsFlag = 0;
